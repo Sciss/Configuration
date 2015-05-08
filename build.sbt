@@ -20,10 +20,13 @@ lazy val video = Project(
     name        := s"$baseName-video",
     description := "Scripts for video processing",
     libraryDependencies ++= Seq(
-      "com.jhlabs" %  "filters"   % "2.0.235-1",
-      "de.sciss"   %% "fileutil"  % "1.1.1",
-      "de.sciss"   %% "swingplus" % "0.2.0",
-      "de.sciss"   %% "numbers"   % "0.1.1"
+      "com.jhlabs"    %  "filters"                  % "2.0.235-1",
+      "de.sciss"      %% "fileutil"                 % "1.1.1",
+      "de.sciss"      %% "swingplus"                % "0.2.0",
+      "de.sciss"      %% "numbers"                  % "0.1.1",
+      "de.sciss"      %% "kollflitz"                % "0.2.0",
+      "de.sciss"      %% "processor"                % "0.4.0",
+      "de.sciss"      %  "prefuse-core"             % "1.0.0"
     )
   )
 )
