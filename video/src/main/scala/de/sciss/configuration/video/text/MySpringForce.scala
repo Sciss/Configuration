@@ -5,20 +5,22 @@ import prefuse.util.force.{Spring, SpringForce}
 object MySpringForce {
   private final val pi    = math.Pi.toFloat
   private final val piH   = (math.Pi/2).toFloat
-  private final val eps   = (1 * math.Pi/180).toFloat
+  private final val eps   = (0.01 * math.Pi/180).toFloat
 }
 class MySpringForce extends SpringForce {
   import MySpringForce._
 
-  private val TORQUE    = params.length
-  private val DISTANCE  = TORQUE + 1
+  private val HTORQUE       = params.length
+  private val VTORQUE       = HTORQUE + 1
+  private val DISTANCE      = VTORQUE + 1
+  private val VSPRING_COEFF = DISTANCE + 1
 
-  params    = params    ++ Array[Float](5e-5f, -1f)
-  minValues = minValues ++ Array[Float](0f   , -1f)
-  maxValues = maxValues ++ Array[Float](1e-3f, 500f)
+  params    = params    ++ Array[Float](5e-5f, 5e-5f, -1f , 8.0e-5f)
+  minValues = minValues ++ Array[Float](0f   , 0f,    -1f , 0f     )
+  maxValues = maxValues ++ Array[Float](1e-3f, 1e-3f, 500f, 8.0e-3f)
 
   override def getParameterNames: Array[String] =
-    super.getParameterNames ++ Array("Torque", "Limit")
+    super.getParameterNames ++ Array("HTorque", "VTorque", "Limit", "VSpring")
 
   // https://stackoverflow.com/questions/1878907/the-smallest-difference-between-2-angles
   private def angleBetween(a: Float, b: Float): Float = {
@@ -46,16 +48,25 @@ class MySpringForce extends SpringForce {
     val r       = if (dist < 0) r1 else math.min(dist, r1)
 
     val d       = r - length
-    val coeff   = (if (s.coeff < 0) params(SpringForce.SPRING_COEFF) else s.coeff) * d / r
-    item1.force(0) +=  coeff * dx
-    item1.force(1) +=  coeff * dy
-    item2.force(0) += -coeff * dx
-    item2.force(1) += -coeff * dy
+
+    val isHorizontal = s.coeff == 0f || s.coeff == 1f
+
+    // val coeff   = (if (s.coeff < 0) params(SpringForce.SPRING_COEFF) else s.coeff) * d / r
+    val coeff = if (isHorizontal) params(SpringForce.SPRING_COEFF) else params(VSPRING_COEFF)
+    val amt   = coeff * d / r
+
+    item1.force(0) +=  amt * dx
+    item1.force(1) +=  amt * dy
+    item2.force(0) += -amt * dx
+    item2.force(1) += -amt * dy
+
+    val torqueAngle = if (isHorizontal) 0f else piH
+    val torque      = if (isHorizontal) params(HTORQUE) else params(VTORQUE)
 
     val ang = math.atan2(dy, dx).toFloat
-    val da = angleBetween(ang, 0 /* -piH */)
+    val da = angleBetween(ang, torqueAngle)
     if (math.abs(da) > eps) {
-      val af  = da / pi * params(TORQUE)
+      val af  = da / pi * torque
       // println(f"ang = $ang%1.3f, da = $da%1.3f, af = $af%1.3f")
       val rH  = r/2
       val cx  = (x1 + x2) / 2

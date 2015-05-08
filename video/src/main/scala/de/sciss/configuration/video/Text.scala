@@ -97,6 +97,7 @@ object Text extends SwingApplication {
       // size      = (640, 480)
 
       // v.display.panTo((-136 + 20, -470 + 20))   // XXX WAT -- where the heck do these values come from?
+      v.display.panTo((-100, 100))
       v.display.zoomAbs((0, 0), 1.3333)
 
       open()

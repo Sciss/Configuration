@@ -156,22 +156,49 @@ object Visual {
       _text = value
 
       import kollflitz.Ops._
-      val x0    = value.replace('\n', ' ').replace("  ", " ")
-      val words = x0.toVector.groupWith((a, b) => a.isLetter == b.isLetter).map(_.mkString).toVector
+      val x0      = value.replace('\n', ' ').replace("  ", " ")
+      val words0  = x0.toVector.groupWith((a, b) => a.isLetter == b.isLetter).map(_.mkString).toVector
+      val words1  = words0.take(10)
+      val lines: Vec[Vec[String]] = words1.grouped(5).toVector
+
       visDo {
         wordMap.foreach { case (word, v) =>
             v.dispose()
         }
         wordMap = Map.empty
 
-        words.foreach { word =>
-          val vs = word.map { c => VisualVertex(this, c) }
-          import kollflitz.Ops._
-          vs.foreachPair { (pred, succ) =>
-            graph.addEdge(pred.pNode, succ.pNode)
+        import kollflitz.Ops._
+
+        val headLastWords: Vec[(Word, Word)] = lines.map { words =>
+          val lineRef = new AnyRef
+
+          val ws = words.map { word =>
+            val wordRef = new AnyRef
+            val vs      = word.map { c => VisualVertex(this, lineRef = lineRef, wordRef = wordRef, character = c) }
+            vs.foreachPair { (pred, succ) =>
+              graph.addEdge(pred.pNode, succ.pNode)
+            }
+            val w  = new Word(vs, word)
+            wordMap += word -> w
+            w
           }
-          val w  = new Word(vs, word)
-          wordMap += word -> w
+
+          ws.foreachPair { (pred, succ) =>
+            val n1 = pred.letters.last.pNode
+            val n2 = succ.letters.head.pNode
+            graph.addEdge(n1, n2)
+          }
+
+          (ws.head, ws.last)
+        }
+
+        headLastWords.foreachPair { case ((predH, predL), (succH, succL)) =>
+          val n1 = predH.letters.head.pNode
+          val n2 = succH.letters.head.pNode
+          graph.addEdge(n1, n2)
+//          val n3 = predL.letters.last.pNode
+//          val n4 = succL.letters.last.pNode
+//          graph.addEdge(n3, n4)
         }
       }
     }
@@ -329,14 +356,27 @@ object Visual {
       //        ("SpringForce", "DefaultSpringLength"  ) -> 10.0f
       //      )
 
+//      val forceMap = Map(
+//        ("NBodyForce" , "GravitationalConstant") -> -0.1f,
+//        ("NBodyForce" , "Distance"             ) -> -1.0f,
+//        ("NBodyForce" , "BarnesHutTheta"       ) -> 0.4f,
+//        ("DragForce"  , "DragCoefficient"      ) -> 0.02f,
+//        ("MySpringForce", "SpringCoefficient"  ) -> 8.0e-5f,
+//        ("MySpringForce", "DefaultSpringLength") -> 0.1f, // 150.0f,
+//        ("MySpringForce", "Torque"             ) -> 2.0e-4f,
+//        ("MySpringForce", "Limit"              ) -> 300.0f
+//      )
+
       val forceMap = Map(
-        ("NBodyForce" , "GravitationalConstant") -> -0.1f,
+        ("NBodyForce" , "GravitationalConstant") -> 0f, // -0.01f,
         ("NBodyForce" , "Distance"             ) -> -1.0f,
         ("NBodyForce" , "BarnesHutTheta"       ) -> 0.4f,
-        ("DragForce"  , "DragCoefficient"      ) -> 0.02f,
-        ("MySpringForce", "SpringCoefficient"  ) -> 8.0e-5f,
-        ("MySpringForce", "DefaultSpringLength") -> 0.1f, // 150.0f,
-        ("MySpringForce", "Torque"             ) -> 2.0e-4f,
+        ("DragForce"  , "DragCoefficient"      ) -> 0.015f,
+        ("MySpringForce", "SpringCoefficient"  ) -> 1.0e-4f,
+        ("MySpringForce", "VSpringCoefficient" ) -> 1.0e-4f,
+        // ("MySpringForce", "DefaultSpringLength") -> 0.1f, // 150.0f,
+        ("MySpringForce", "HTorque"            ) -> 2.0e-4f,
+        ("MySpringForce", "VTorque"            ) -> 2.0e-4f,
         ("MySpringForce", "Limit"              ) -> 300.0f
       )
 
@@ -378,8 +418,8 @@ object Visual {
 
       // ------------------------------------------------
 
-      edgeRenderer.setHorizontalAlignment1(Constants.LEFT )
-      edgeRenderer.setHorizontalAlignment2(Constants.RIGHT)
+      edgeRenderer.setHorizontalAlignment1(Constants.CENTER) // LEFT )
+      edgeRenderer.setHorizontalAlignment2(Constants.CENTER) // RIGHT)
       edgeRenderer.setVerticalAlignment1  (Constants.CENTER)
       edgeRenderer.setVerticalAlignment2  (Constants.CENTER)
 
