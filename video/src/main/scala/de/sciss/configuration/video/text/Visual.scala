@@ -82,7 +82,10 @@ object Visual {
 
   class Word(val letters: Vec[VisualVertex], val word: String) {
     def dispose(): Unit = letters.foreach(_.dispose())
+    lazy val width = letters.map(_.advance).sum   // yes I know this is not precise
   }
+
+  class Line(val words: Vec[Word])
 
   private final class Impl // (map: TMap[S#ID, VisualVertex], val algorithm: Algorithm, cursorPos0: S#Acc)
     extends Visual /* with ComponentHolder[Component] */ {
@@ -157,9 +160,8 @@ object Visual {
 
       import kollflitz.Ops._
       val x0      = value.replace('\n', ' ').replace("  ", " ")
-      val words0  = x0.toVector.groupWith((a, b) => a.isLetter == b.isLetter).map(_.mkString).toVector
-      val words1  = words0.take(10)
-      val lines: Vec[Vec[String]] = words1.grouped(5).toVector
+      val words   = x0.toVector.groupWith((a, b) => a.isLetter == b.isLetter).map(_.mkString).toVector
+      // val lines: Vec[Vec[String]] = words1.grouped(5).toVector
 
       visDo {
         wordMap.foreach { case (word, v) =>
@@ -169,32 +171,50 @@ object Visual {
 
         import kollflitz.Ops._
 
-        val headLastWords: Vec[(Word, Word)] = lines.map { words =>
-          val lineRef = new AnyRef
+        val lineRef0 = new AnyRef
 
-          val ws = words.map { word =>
-            val wordRef = new AnyRef
-            val vs      = word.map { c => VisualVertex(this, lineRef = lineRef, wordRef = wordRef, character = c) }
-            vs.foreachPair { (pred, succ) =>
-              graph.addEdge(pred.pNode, succ.pNode)
-            }
-            val w  = new Word(vs, word)
-            wordMap += word -> w
-            w
+        val ws = words.map { word =>
+          val wordRef = new AnyRef
+          val vs      = word.map { c => VisualVertex(this, lineRef = lineRef0, wordRef = wordRef, character = c) }
+          vs.foreachPair { (pred, succ) =>
+            graph.addEdge(pred.pNode, succ.pNode)
           }
-
-          ws.foreachPair { (pred, succ) =>
-            val n1 = pred.letters.last.pNode
-            val n2 = succ.letters.head.pNode
-            graph.addEdge(n1, n2)
-          }
-
-          (ws.head, ws.last)
+          val w  = new Word(vs, word)
+          wordMap += word -> w
+          w
         }
 
-        headLastWords.foreachPair { case ((predH, predL), (succH, succL)) =>
-          val n1 = predH.letters.head.pNode
-          val n2 = succH.letters.head.pNode
+        val maxWidth = 100
+
+        @tailrec def mkLines(words: Vec[Word], rem: Vec[Word], width: Int, res: Vec[Line]): Vec[Line] = {
+          def flush(): Line = {
+            words.foreachPair { (pred, succ) =>
+              val n1 = pred.letters.last.pNode
+              val n2 = succ.letters.head.pNode
+              graph.addEdge(n1, n2)
+            }
+            val line = new Line(words)
+            words.foreach(_.letters.foreach(_.lineRef = line))
+            line
+          }
+
+          if (width > maxWidth) { // note: we allow the last word to exceed the maximum width
+            val line = flush()
+            mkLines(Vector.empty, rem, 0, res :+ line)
+          } else rem match {
+            case head +: tail =>
+              mkLines(words :+ head, tail, width + head.width, res)
+            case _ =>
+              val line = flush()
+              res :+ line
+          }
+        }
+
+        val lines = mkLines(Vector.empty, ws, 0, Vector.empty)
+
+        lines.foreachPair { (pred, succ) =>
+          val n1 = pred.words.head.letters.head.pNode
+          val n2 = succ.words.head.letters.head.pNode
           graph.addEdge(n1, n2)
 //          val n3 = predL.letters.last.pNode
 //          val n4 = succL.letters.last.pNode
