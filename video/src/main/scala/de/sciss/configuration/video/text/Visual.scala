@@ -1,7 +1,7 @@
 package de.sciss.configuration.video.text
 
 import java.awt.image.BufferedImage
-import java.awt.{Color, Font, LayoutManager, RenderingHints}
+import java.awt.{Point, Color, Font, LayoutManager, RenderingHints}
 import java.io.FileInputStream
 import javax.imageio.ImageIO
 import javax.swing.JPanel
@@ -10,7 +10,6 @@ import de.sciss.file._
 import de.sciss.kollflitz
 import de.sciss.processor.Processor
 import prefuse.action.assignment.ColorAction
-import prefuse.action.layout.graph.ForceDirectedLayout
 import prefuse.action.{ActionList, RepaintAction}
 import prefuse.activity.Activity
 import prefuse.controls.{DragControl, PanControl, WheelZoomControl, ZoomControl}
@@ -34,8 +33,8 @@ object Visual {
   val DEBUG = false
 
   // val VIDEO_WIDTH     = 720
-  val VIDEO_HEIGHT    = 1920 / 2 // 576
-  val VIDEO_WIDTH_SQR = 1080 / 2 // 1024 // 1024 : 576 = 16 : 9
+  private val VIDEO_HEIGHT    = 1920 / 3 // 576
+  private val VIDEO_WIDTH_SQR = 1080 / 3 // 1024 // 1024 : 576 = 16 : 9
 
   private lazy val _initFont: Font = {
     //    val is  = Wolkenpumpe.getClass.getResourceAsStream("BellySansCondensed.ttf")
@@ -93,6 +92,7 @@ object Visual {
     private[this] var _vg : VisualGraph         = _
     private[this] var _lay: MyForceDirectedLayout = _
     private[this] var actionColor: ActionList   = _
+    private[this] var actionAutoZoom: AutoZoom  = _
     private[this] var _runAnim = false
 
     private[this] var _text = ""
@@ -185,7 +185,7 @@ object Visual {
           w
         }
 
-        val maxWidth = 320 // 400
+        val maxWidth = 320 // 360 // 400
 
         @tailrec def mkLines(words: Vec[Word], rem: Vec[Word], width: Int, res: Vec[Line]): Vec[Line] = {
           def flush(): Line = {
@@ -431,12 +431,17 @@ object Visual {
 
       // ------------------------------------------------
 
+      actionAutoZoom = new AutoZoom(this)
+
       // initialize the display
       _dsp.setSize(VIDEO_WIDTH_SQR, VIDEO_HEIGHT)
+      _dsp.setMinimumSize(new Dimension(VIDEO_WIDTH_SQR, VIDEO_HEIGHT))
+      _dsp.setMaximumSize(new Dimension(VIDEO_WIDTH_SQR, VIDEO_HEIGHT))
       _dsp.addControlListener(new ZoomControl     ())
       _dsp.addControlListener(new WheelZoomControl())
       _dsp.addControlListener(new PanControl        )
       _dsp.addControlListener(new DragControl       )
+      _dsp.addControlListener(new ClickControl(this))
       _dsp.setHighQuality(true)
 
       // ------------------------------------------------
@@ -492,6 +497,7 @@ object Visual {
           new ActionList()
         }
       actionLayout.add(_lay)
+      actionLayout.add(actionAutoZoom)
       // actionLayout.add(new PrefuseAggregateLayout(AGGR_PROC))
       actionLayout.add(new RepaintAction())
       actionLayout.setVisualization(_vis)
@@ -513,9 +519,13 @@ object Visual {
       // requireEDT()
       val bImg  = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
       val g     = bImg.createGraphics()
+      val scale = width.toDouble / VIDEO_WIDTH_SQR
+      val p0 = new Point(0, 0)
       try {
         _dsp.damageReport() // force complete redrawing
+        _dsp.zoom(p0, scale)
         _dsp.paintDisplay(g, new Dimension(width, height))
+        _dsp.zoom(p0, 1.0/scale)
         ImageIO.write(bImg, "png", file)
       } finally {
         g.dispose()

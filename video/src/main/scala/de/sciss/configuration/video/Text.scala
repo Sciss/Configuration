@@ -13,7 +13,7 @@ import prefuse.util.ui.JForcePanel
 import scala.collection.breakOut
 import scala.swing.Swing._
 import scala.swing.event.ButtonClicked
-import scala.swing.{BorderPanel, Button, Component, FlowPanel, Frame, Orientation, ProgressBar, SplitPane, SwingApplication, ToggleButton}
+import scala.swing.{BoxPanel, BorderPanel, Button, Component, FlowPanel, Frame, Orientation, ProgressBar, SplitPane, SwingApplication, ToggleButton}
 import scala.util.{Failure, Success}
 
 object Text extends SwingApplication {
@@ -93,9 +93,10 @@ object Text extends SwingApplication {
       }
     }
 
-    val pBottom = new FlowPanel(ggHead, ggPrevIter, ggRunAnim, ggStepAnim, ggSaveFrame, ggSaveFrameSeries,
-      ggParamSnap, ggProgress)
-
+    val pBottom = new BoxPanel(Orientation.Vertical) {
+      contents += new FlowPanel(ggHead     , ggPrevIter       , ggRunAnim  , ggStepAnim)
+      contents += new FlowPanel(ggSaveFrame, ggSaveFrameSeries, ggParamSnap, ggProgress)
+    }
     val fSim    = v.forceSimulator
     val fPanel  = new JForcePanel(fSim)
     fPanel.setBackground(null)
@@ -115,8 +116,8 @@ object Text extends SwingApplication {
       // size      = (640, 480)
 
       // v.display.panTo((-136 + 20, -470 + 20))   // XXX WAT -- where the heck do these values come from?
-      v.display.panTo((-100, 100))
-      v.display.zoomAbs((0, 0), 1.3333)
+//      v.display.panTo((-100, 100))
+//      v.display.zoomAbs((0, 0), 1.3333)
 
       open()
 
