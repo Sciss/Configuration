@@ -78,84 +78,84 @@ object Text1 {
   4255 ->
   Map(
     "DragForce" -> Map("DragCoefficient" -> 0.014f),
-    "MySpringForce" -> Map("DefaultSpringLength" -> 50.0f, "HTorque" -> 0.005f, "Limit" -> 300.0f, "SpringCoefficient" -> 0.001f, "VLength" -> 170.83f, "VSpring" -> 0.0016800001f, "VTorque" -> 5.9999997E-4f),
+    "MySpringForce" -> Map("DefaultSpringLength" -> 50.0f, "HTorque" -> 0.005f, "Limit" -> 300.0f, "SpringCoefficient" -> 0.001f, "VLength" -> 150f /* 170.83f */, "VSpring" -> 0.0016800001f, "VTorque" -> 5.9999997E-4f),
     "NBodyForce" -> Map("BarnesHutTheta" -> 0.4f, "Distance" -> -1.0f, "GravitationalConstant" -> 0.0f)
   ),
 
   4696 ->
   Map(
     "DragForce" -> Map("DragCoefficient" -> 0.014f),
-    "MySpringForce" -> Map("DefaultSpringLength" -> 50.0f, "HTorque" -> 0.005f, "Limit" -> 300.0f, "SpringCoefficient" -> 0.001f, "VLength" -> 150.85f, "VSpring" -> 0.0016800001f, "VTorque" -> 0.00225f),
+    "MySpringForce" -> Map("DefaultSpringLength" -> 50.0f, "HTorque" -> 0.005f, "Limit" -> 300.0f, "SpringCoefficient" -> 0.001f, "VLength" -> 120f /* 150.85f */, "VSpring" -> 0.0016800001f, "VTorque" -> 0.00225f),
     "NBodyForce" -> Map("BarnesHutTheta" -> 0.4f, "Distance" -> -1.0f, "GravitationalConstant" -> 0.0f)
   ),
 
   5244 ->
   Map(
     "DragForce" -> Map("DragCoefficient" -> 0.014f),
-    "MySpringForce" -> Map("DefaultSpringLength" -> 50.0f, "HTorque" -> 0.005f, "Limit" -> 300.0f, "SpringCoefficient" -> 0.001f, "VLength" -> 100.9f, "VSpring" -> 0.0016800001f, "VTorque" -> 0.00225f),
+    "MySpringForce" -> Map("DefaultSpringLength" -> 50.0f, "HTorque" -> 0.005f, "Limit" -> 300.0f, "SpringCoefficient" -> 0.001f, "VLength" -> 90f /* 100.9f */, "VSpring" -> 0.0016800001f, "VTorque" -> 0.00225f),
     "NBodyForce" -> Map("BarnesHutTheta" -> 0.4f, "Distance" -> -1.0f, "GravitationalConstant" -> 0.0f)
   ),
 
   6275 ->
   Map(
     "DragForce" -> Map("DragCoefficient" -> 0.016f),
-    "MySpringForce" -> Map("DefaultSpringLength" -> 50.0f, "HTorque" -> 0.0025f, "Limit" -> 300.0f, "SpringCoefficient" -> 4.9510004E-4f, "VLength" -> 100.9f, "VSpring" -> 6.4000004E-4f, "VTorque" -> 7.5E-4f),
+    "MySpringForce" -> Map("DefaultSpringLength" -> 50.0f, "HTorque" -> 0.0025f, "Limit" -> 300.0f, "SpringCoefficient" -> 4.9510004E-4f, "VLength" -> 70f /* 100.9f */, "VSpring" -> 6.4000004E-4f, "VTorque" -> 7.5E-4f),
     "NBodyForce" -> Map("BarnesHutTheta" -> 0.4f, "Distance" -> -1.0f, "GravitationalConstant" -> 0.0f)
   ),
 
   6556 ->
   Map(
     "DragForce" -> Map("DragCoefficient" -> 0.016f),
-    "MySpringForce" -> Map("DefaultSpringLength" -> 50.0f, "HTorque" -> 0.0025f, "Limit" -> 300.0f, "SpringCoefficient" -> 4.9510004E-4f, "VLength" -> 50.95f, "VSpring" -> 6.4000004E-4f, "VTorque" -> 7.5E-4f),
+    "MySpringForce" -> Map("DefaultSpringLength" -> 50.0f, "HTorque" -> 0.0025f, "Limit" -> 300.0f, "SpringCoefficient" -> 4.9510004E-4f, "VLength" -> 40f /* 50.95f */, "VSpring" -> 6.4000004E-4f, "VTorque" -> 7.5E-4f),
     "NBodyForce" -> Map("BarnesHutTheta" -> 0.4f, "Distance" -> -1.0f, "GravitationalConstant" -> 0.0f)
   ),
 
   7585 ->
   Map(
     "DragForce" -> Map("DragCoefficient" -> 0.01f),
-    "MySpringForce" -> Map("DefaultSpringLength" -> 50.0f, "HTorque" -> 0.0025f, "Limit" -> 300.0f, "SpringCoefficient" -> 4.9510004E-4f, "VLength" -> 50.95f, "VSpring" -> 0.008f, "VTorque" -> 0.0025499999f),
+    "MySpringForce" -> Map("DefaultSpringLength" -> 50.0f, "HTorque" -> 0.0025f, "Limit" -> 300.0f, "SpringCoefficient" -> 4.9510004E-4f, "VLength" -> 40f /* 50.95f */, "VSpring" -> 0.008f, "VTorque" -> 0.0025499999f),
     "NBodyForce" -> Map("BarnesHutTheta" -> 0.4f, "Distance" -> -1.0f, "GravitationalConstant" -> 0.0f)
   ),
 
   8271 ->
   Map(
     "DragForce" -> Map("DragCoefficient" -> 0.016f),
-    "MySpringForce" -> Map("DefaultSpringLength" -> 50.0f, "HTorque" -> 0.00185f, "Limit" -> 300.0f, "SpringCoefficient" -> 4.1590002E-4f, "VLength" -> 50.95f, "VSpring" -> 7.2E-4f, "VTorque" -> 0.0016999999f),
+    "MySpringForce" -> Map("DefaultSpringLength" -> 50.0f, "HTorque" -> 0.00185f, "Limit" -> 300.0f, "SpringCoefficient" -> 4.1590002E-4f, "VLength" -> 40f /* 50.95f */, "VSpring" -> 7.2E-4f, "VTorque" -> 0.0016999999f),
     "NBodyForce" -> Map("BarnesHutTheta" -> 0.4f, "Distance" -> -1.0f, "GravitationalConstant" -> 0.0f)
   ),
 
   9022 ->
   Map(
     "DragForce" -> Map("DragCoefficient" -> 0.016f),
-    "MySpringForce" -> Map("DefaultSpringLength" -> 50.0f, "HTorque" -> 0.00185f, "Limit" -> 300.0f, "SpringCoefficient" -> 4.1590002E-4f, "VLength" -> 30.97f, "VSpring" -> 5.6E-4f, "VTorque" -> 0.0016999999f),
+    "MySpringForce" -> Map("DefaultSpringLength" -> 50.0f, "HTorque" -> 0.00185f, "Limit" -> 300.0f, "SpringCoefficient" -> 4.1590002E-4f, "VLength" -> 30f /* 30.97f */, "VSpring" -> 5.6E-4f, "VTorque" -> 0.0016999999f),
     "NBodyForce" -> Map("BarnesHutTheta" -> 0.4f, "Distance" -> -1.0f, "GravitationalConstant" -> 0.2f)
   ),
 
   9379 ->
   Map(
     "DragForce" -> Map("DragCoefficient" -> 0.016f),
-    "MySpringForce" -> Map("DefaultSpringLength" -> 50.0f, "HTorque" -> 0.00185f, "Limit" -> 300.0f, "SpringCoefficient" -> 4.1590002E-4f, "VLength" -> 30.97f, "VSpring" -> 5.6E-4f, "VTorque" -> 0.0016999999f),
+    "MySpringForce" -> Map("DefaultSpringLength" -> 50.0f, "HTorque" -> 0.00185f, "Limit" -> 300.0f, "SpringCoefficient" -> 4.1590002E-4f, "VLength" -> 20f /* 30.97f */, "VSpring" -> 5.6E-4f, "VTorque" -> 0.0016999999f),
     "NBodyForce" -> Map("BarnesHutTheta" -> 0.4f, "Distance" -> -1.0f, "GravitationalConstant" -> 0.0f)
   ),
 
-  9732 ->
+  9600 /* 9732 */ ->
   Map(
     "DragForce" -> Map("DragCoefficient" -> 0.016f),
-    "MySpringForce" -> Map("DefaultSpringLength" -> 50.0f, "HTorque" -> 0.00185f, "Limit" -> 300.0f, "SpringCoefficient" -> 4.1590002E-4f, "VLength" -> 30.97f, "VSpring" -> 5.6E-4f, "VTorque" -> 0.0016999999f),
+    "MySpringForce" -> Map("DefaultSpringLength" -> 50.0f, "HTorque" -> 0.00185f, "Limit" -> 300.0f, "SpringCoefficient" -> 4.1590002E-4f, "VLength" -> 20f /* 30.97f */, "VSpring" -> 5.6E-4f, "VTorque" -> 0.0016999999f),
     "NBodyForce" -> Map("BarnesHutTheta" -> 0.4f, "Distance" -> -1.0f, "GravitationalConstant" -> -0.2f)
   ),
 
-  9926 ->
-  Map(
-    "DragForce" -> Map("DragCoefficient" -> 0.016f),
-    "MySpringForce" -> Map("DefaultSpringLength" -> 50.0f, "HTorque" -> 0.00185f, "Limit" -> 300.0f, "SpringCoefficient" -> 4.1590002E-4f, "VLength" -> 30.97f, "VSpring" -> 5.6E-4f, "VTorque" -> 0.0016999999f),
-    "NBodyForce" -> Map("BarnesHutTheta" -> 0.4f, "Distance" -> -1.0f, "GravitationalConstant" -> 0.0f)
-  ),
+//  9926 ->
+//  Map(
+//    "DragForce" -> Map("DragCoefficient" -> 0.016f),
+//    "MySpringForce" -> Map("DefaultSpringLength" -> 50.0f, "HTorque" -> 0.00185f, "Limit" -> 300.0f, "SpringCoefficient" -> 4.1590002E-4f, "VLength" -> 20f /* 30.97f */, "VSpring" -> 5.6E-4f, "VTorque" -> 0.0016999999f),
+//    "NBodyForce" -> Map("BarnesHutTheta" -> 0.4f, "Distance" -> -1.0f, "GravitationalConstant" -> 0.0f)
+//  ),
 
-  10126 ->
+  9900 /* 10126 */ ->
   Map(
     "DragForce" -> Map("DragCoefficient" -> 0.022f),
-    "MySpringForce" -> Map("DefaultSpringLength" -> 50.0f, "HTorque" -> 0.00185f, "Limit" -> 300.0f, "SpringCoefficient" -> 4.1590002E-4f, "VLength" -> 30.97f, "VSpring" -> 5.6E-4f, "VTorque" -> 0.0016999999f),
+    "MySpringForce" -> Map("DefaultSpringLength" -> 50.0f, "HTorque" -> 0.00185f, "Limit" -> 300.0f, "SpringCoefficient" -> 4.1590002E-4f, "VLength" -> 20f /* 30.97f */, "VSpring" -> 5.6E-4f, "VTorque" -> 0.0016999999f),
     "NBodyForce" -> Map("BarnesHutTheta" -> 0.4f, "Distance" -> -1.0f, "GravitationalConstant" -> 0.0f)
   )
   )

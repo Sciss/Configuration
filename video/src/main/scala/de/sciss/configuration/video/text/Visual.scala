@@ -31,7 +31,7 @@ import scala.util.Try
 import scala.util.control.NonFatal
 
 object Visual {
-  val DEBUG = true
+  val DEBUG = false
 
   // val VIDEO_WIDTH     = 720
   private val VIDEO_HEIGHT    = 1920 // / 3 // 576
@@ -97,7 +97,8 @@ object Visual {
     private[this] var _runAnim = false
 
     private[this] var _text = ""
-    private[this] var wordMap = Map.empty[String, Word]
+    private[this] var wordMap  = Map.empty[String, Word]
+    private[this] var wordVec = Vec.empty[Word]
 
     private[this] var forces: Map[String, Force] = _
 
@@ -148,14 +149,23 @@ object Visual {
 //    def deferVisTx(thunk: => Unit)(implicit tx: TxnLike): Unit =
 //      guiCode.transform(_ :+ (() => thunk))(tx.peer)
 
-    private def visDo(body: => Unit): Unit = _vis.synchronized {
-      stopAnimation()
-      body
-      startAnimation()
+    private def visDo[A](body: => A): A = _vis.synchronized {
+      // stopAnimation()
+      val res = body
+      // startAnimation()
+      res
     }
 
     def text: String = _text
     def text_=(value: String): Unit = if (_text != value) {
+      visDo {
+        stopAnimation()
+        setText(text)
+        startAnimation()
+      }
+    }
+
+    private def setText(value: String): Unit = {
       _text = value
 
       import kollflitz.Ops._
@@ -165,64 +175,64 @@ object Visual {
       } .map(_.mkString).toVector
       // val lines: Vec[Vec[String]] = words1.grouped(5).toVector
 
-      visDo {
-        wordMap.foreach { case (word, v) =>
-          v.dispose()
+      wordMap.foreach { case (word, v) =>
+        v.dispose()
+      }
+      wordMap   = Map.empty
+      wordVec   = Vector.empty
+
+      import kollflitz.Ops._
+
+      val lineRef0 = new AnyRef
+
+      val ws = words.map { word =>
+        val wordRef = new AnyRef
+        val vs      = word.map { c => VisualVertex(this, lineRef = lineRef0, wordRef = wordRef, character = c) }
+        vs.foreachPair { (pred, succ) =>
+          graph.addEdge(pred.pNode, succ.pNode)
         }
-        wordMap = Map.empty
+        val w  = new Word(vs, word)
+        wordMap += word -> w
+        wordVec :+= w
+        w
+      }
 
-        import kollflitz.Ops._
+      val maxWidth = 320 // 360 // 400
 
-        val lineRef0 = new AnyRef
-
-        val ws = words.map { word =>
-          val wordRef = new AnyRef
-          val vs      = word.map { c => VisualVertex(this, lineRef = lineRef0, wordRef = wordRef, character = c) }
-          vs.foreachPair { (pred, succ) =>
-            graph.addEdge(pred.pNode, succ.pNode)
+      @tailrec def mkLines(words: Vec[Word], rem: Vec[Word], width: Int, res: Vec[Line]): Vec[Line] = {
+        def flush(): Line = {
+          words.foreachPair { (pred, succ) =>
+            val n1 = pred.letters.last.pNode
+            val n2 = succ.letters.head.pNode
+            graph.addEdge(n1, n2)
           }
-          val w  = new Word(vs, word)
-          wordMap += word -> w
-          w
+          val line = new Line(words)
+          words.foreach(_.letters.foreach(_.lineRef = line))
+          line
         }
 
-        val maxWidth = 320 // 360 // 400
-
-        @tailrec def mkLines(words: Vec[Word], rem: Vec[Word], width: Int, res: Vec[Line]): Vec[Line] = {
-          def flush(): Line = {
-            words.foreachPair { (pred, succ) =>
-              val n1 = pred.letters.last.pNode
-              val n2 = succ.letters.head.pNode
-              graph.addEdge(n1, n2)
-            }
-            val line = new Line(words)
-            words.foreach(_.letters.foreach(_.lineRef = line))
-            line
-          }
-
-          // note: we allow the last word to exceed the maximum width
-          if (width > maxWidth && rem.headOption.map(_.letters.size).getOrElse(0) > 1) {
+        // note: we allow the last word to exceed the maximum width
+        if (width > maxWidth && rem.headOption.map(_.letters.size).getOrElse(0) > 1) {
+          val line = flush()
+          mkLines(Vector.empty, rem, 0, res :+ line)
+        } else rem match {
+          case head +: tail =>
+            mkLines(words :+ head, tail, width + head.width, res)
+          case _ =>
             val line = flush()
-            mkLines(Vector.empty, rem, 0, res :+ line)
-          } else rem match {
-            case head +: tail =>
-              mkLines(words :+ head, tail, width + head.width, res)
-            case _ =>
-              val line = flush()
-              res :+ line
-          }
+            res :+ line
         }
+      }
 
-        val lines = mkLines(Vector.empty, ws, 0, Vector.empty)
+      val lines = mkLines(Vector.empty, ws, 0, Vector.empty)
 
-        lines.foreachPair { (pred, succ) =>
-          val n1 = pred.words.head.letters.head.pNode
-          val n2 = succ.words.head.letters.head.pNode
-          graph.addEdge(n1, n2)
+      lines.foreachPair { (pred, succ) =>
+        val n1 = pred.words.head.letters.head.pNode
+        val n2 = succ.words.head.letters.head.pNode
+        graph.addEdge(n1, n2)
 //          val n3 = predL.letters.last.pNode
 //          val n4 = succL.letters.last.pNode
 //          graph.addEdge(n3, n4)
-        }
       }
     }
 
@@ -538,7 +548,9 @@ object Visual {
     private def execOnEDT[A](code: => A)(implicit exec: ExecutionContext): A = {
       val p = Promise[A]()
       Swing.onEDT {
-        val res = Try(code)
+        val res = Try {
+          visDo(code)
+        }
         p.complete(res)
       }
       blocking(Await.result(p.future, Duration.Inf)) //  Duration(20, TimeUnit.SECONDS)))
@@ -574,9 +586,12 @@ object Visual {
           if (initialized) {
 
           } else {
-            display.panAbs(settings.width * 0.5, settings.height * 0.5)
-            display.zoomAbs(new Point(0, 0), 0.1)
-            text = settings.text
+            execOnEDT {
+              display.panAbs(settings.width * 0.5, settings.height * 0.5)
+              display.zoomAbs(new Point(0, 0), 0.1)
+              setText(settings.text)
+              animationStep()
+            }
             initialized = true
           }
 
@@ -637,24 +652,24 @@ object Visual {
         // now dissolve graph
         import kollflitz.RandomOps._
         implicit val rnd = new util.Random(0L)
-        val m0 = wordMap.values.flatMap(_.letters).toIndexedSeq.scramble()
-        // println(s"VERTICES AT END: ${m0.size}")
+        // val m0  = (wordMap.values.flatMap(_.letters)(breakOut): Vec[VisualVertex]).scramble()
+        val m = wordVec.scramble().flatMap(_.letters)
+        println(s"VERTICES AT END: ${m.size}")
 
-        val m = m0.toIndexedSeq.scramble()
         // println(s"FRAMES-PLOP $framesPlop")
         @tailrec def loopPlop(sq: Vec[VisualVertex]): Unit = sq match {
           case head +: tail =>
+            val f = mkF()
             execOnEDT {
               try {
                 head.dispose()
               } catch {
                 case NonFatal(e) => e.printStackTrace()
               }
-              val f = mkF()
               saveFrameAsPNG(f, width = width, height = height)
               animationStep()
-              frame += 1
             }
+            frame += 1
             loopPlop(tail)
 
           case _ =>
@@ -662,6 +677,10 @@ object Visual {
         loopPlop(m)
 
         // execOnEDT(g.dispose())
+        execOnEDT {
+          wordMap = Map.empty
+          wordVec = Vector.empty
+        }
       }
     }
   }

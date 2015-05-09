@@ -75,7 +75,8 @@ object Text extends SwingApplication {
         cfg.baseFile  = dir / "frame"
         cfg.anim      = text.Text1.anim
         cfg.text      = text.Text1.text
-        cfg.numFrames = cfg.anim.last._1 + cfg.framesPerSecond * 120
+        cfg.numFrames = cfg.anim.last._1 + cfg.framesPerSecond * 60 // 120
+        cfg.baseFile
 
         val p         = v.saveFrameSeriesAsPNG(cfg)
         seriesProc    = Some(p)
