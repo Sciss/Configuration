@@ -28,6 +28,7 @@ import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Promise, blocking}
 import scala.swing.{Component, Dimension, Graphics2D, Rectangle, Swing}
 import scala.util.Try
+import scala.util.control.NonFatal
 
 object Visual {
   val DEBUG = true
@@ -643,12 +644,17 @@ object Visual {
         // println(s"FRAMES-PLOP $framesPlop")
         @tailrec def loopPlop(sq: Vec[VisualVertex]): Unit = sq match {
           case head +: tail =>
-            head.dispose()
-
-            val f = mkF()
-            saveFrameAsPNG(f, width = width, height = height)
-            animationStep()
-            frame += 1
+            execOnEDT {
+              try {
+                head.dispose()
+              } catch {
+                case NonFatal(e) => e.printStackTrace()
+              }
+              val f = mkF()
+              saveFrameAsPNG(f, width = width, height = height)
+              animationStep()
+              frame += 1
+            }
             loopPlop(tail)
 
           case _ =>
