@@ -9,14 +9,13 @@ object VideoSettings {
 
   implicit def build(b: Builder): VideoSettings = {
     import b._
-    Impl(baseFile = baseFile, width = width, height = height, framesPerSecond = framesPerSecond,
-      secondsPerIteration = secondsPerIteration, secondsDecay = secondsDecay, secondsSkip = secondsSkip,
-      chromosomeIndex = chromosomeIndex, plopDur = plopDur, speedLimit = speedLimit)
+    Impl(baseFile = baseFile, width = width, height = height,
+      numFrames = numFrames, framesPerSecond = framesPerSecond,
+      speedLimit = speedLimit, text = text, anim = anim)
   }
 
-  private final case class Impl(baseFile: File, width: Int, height: Int, framesPerSecond: Int,
-                                secondsPerIteration: Double, secondsDecay: Double, secondsSkip: Double,
-                                chromosomeIndex: Int, plopDur: Double, speedLimit: Double)
+  private final case class Impl(baseFile: File, width: Int, height: Int, numFrames: Int, framesPerSecond: Int,
+                                speedLimit: Double, text: String, anim: Anim)
     extends VideoSettings {
 
     override def productPrefix = "VideoSetting"
@@ -33,24 +32,21 @@ object VideoSettings {
 
     var width               = 1080 // 1920
     var height              = 1920 // 1080
+    var numFrames           = 10000
     var framesPerSecond     = 25
-    var secondsPerIteration = 10.0 //  2.0
-    var secondsDecay        = 20.0 // 10.0
-    var secondsSkip         = 0.0
-    var chromosomeIndex     = 0
-    var plopDur             = 0.333
-    var speedLimit          = 0.04
+    var speedLimit          = 0.1
+    var text                = "Foo Bar"
+    var anim                = Vector.empty: Anim
   }
 }
 trait VideoSettings {
   def baseFile            : File
   def width               : Int
   def height              : Int
+  def numFrames           : Int
   def framesPerSecond     : Int
-  def secondsPerIteration : Double
-  def secondsDecay        : Double
-  def secondsSkip         : Double
-  def chromosomeIndex     : Int
-  def plopDur             : Double
+  // def plopDur             : Double
   def speedLimit          : Double
+  def text                : String
+  def anim                : Anim
 }

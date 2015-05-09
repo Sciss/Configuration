@@ -7,6 +7,8 @@ import prefuse.action.Action
 import prefuse.util.GraphicsLib
 
 class AutoZoom(main: Visual) extends Action {
+  // var karlHeinz = 1.0
+
   def run(frac: Double): Unit = {
     val bounds = main.visualization.getBounds(Visual.GROUP_GRAPH)
     zoom(bounds)
@@ -21,15 +23,17 @@ class AutoZoom(main: Visual) extends Action {
   }
 
   private def fitViewToBounds(display: Display, bounds: Rectangle2D): Unit = {
-    val w       = display.getWidth
-    val h       = display.getHeight
-    val cx      = bounds.getCenterX
-    val cy      = bounds.getCenterY
+    val w       = display.getWidth  // * karlHeinz
+    val h       = display.getHeight // * karlHeinz
+    val dx      = display.getDisplayX
+    val dy      = display.getDisplayY
+    val cx      = bounds.getCenterX // * karlHeinz
+    val cy      = bounds.getCenterY // * karlHeinz
     val wb      = math.max(cx - bounds.getMinX, bounds.getMaxX - cx)
     val hb      = math.max(cy - bounds.getMinY, bounds.getMaxY - cy)
     val scale0  = math.min(w / (2 * wb), h / (2 * hb))
 
-    val ds      = display.getScale
+    val ds      = display.getScale // * karlHeinz
     val scale1  = scale0 / ds // math.max(Visual.VIDEO_WIDTH_SQR, scale0) / ds
     val scale2  = math.min(1.0, scale1 * ds) / ds
 
@@ -46,8 +50,8 @@ class AutoZoom(main: Visual) extends Action {
 
     // println(f"dx $dx%1.2f, dy $dy%1.2f, cx $cx1%1.2f, cy $cy1%1.2f; scale = $ds%1.2f")
 
-    val ax = (w / (2 * ds) - cx) + display.getDisplayX / ds
-    val ay = (h / (2 * ds) - cy) + display.getDisplayY / ds
+    val ax = (w / (2 * ds) - cx) + dx / ds
+    val ay = (h / (2 * ds) - cy) + dy / ds
 
     /*
         double sx = m_transform.getScaleX();

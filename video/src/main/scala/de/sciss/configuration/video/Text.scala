@@ -13,7 +13,7 @@ import prefuse.util.ui.JForcePanel
 import scala.collection.breakOut
 import scala.swing.Swing._
 import scala.swing.event.ButtonClicked
-import scala.swing.{BoxPanel, BorderPanel, Button, Component, FlowPanel, Frame, Orientation, ProgressBar, SplitPane, SwingApplication, ToggleButton}
+import scala.swing.{ScrollPane, BoxPanel, BorderPanel, Button, Component, FlowPanel, Frame, Orientation, ProgressBar, SplitPane, SwingApplication, ToggleButton}
 import scala.util.{Failure, Success}
 
 object Text extends SwingApplication {
@@ -72,11 +72,11 @@ object Text extends SwingApplication {
         val dir       = file("render")
         require(dir.isDirectory)
         val cfg       = VideoSettings()
-        cfg.secondsSkip  = 0.0 // 60
-        cfg.secondsDecay = 20.0 // 60.0 //
-        cfg.secondsPerIteration = 10.0 // 2.0
-        cfg.chromosomeIndex     = 100
         cfg.baseFile  = dir / "frame"
+        cfg.anim      = text.Text1.anim
+        cfg.text      = text.Text1.text
+        cfg.numFrames = cfg.anim.last._1 + cfg.framesPerSecond * 120
+
         val p         = v.saveFrameSeriesAsPNG(cfg)
         seriesProc    = Some(p)
         p.addListener {
@@ -100,7 +100,8 @@ object Text extends SwingApplication {
     val fSim    = v.forceSimulator
     val fPanel  = new JForcePanel(fSim)
     fPanel.setBackground(null)
-    val split = new SplitPane(Orientation.Vertical, v.component, Component.wrap(fPanel))
+    val scroll = new ScrollPane(v.component)
+    val split = new SplitPane(Orientation.Vertical, scroll, Component.wrap(fPanel))
     split.oneTouchExpandable  = true
     split.continuousLayout    = false
     split.dividerLocation     = 800

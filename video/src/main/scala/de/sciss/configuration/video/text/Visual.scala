@@ -7,7 +7,7 @@ import javax.imageio.ImageIO
 import javax.swing.JPanel
 
 import de.sciss.file._
-import de.sciss.kollflitz
+import de.sciss.{numbers, kollflitz}
 import de.sciss.processor.Processor
 import prefuse.action.assignment.ColorAction
 import prefuse.action.{ActionList, RepaintAction}
@@ -33,8 +33,8 @@ object Visual {
   val DEBUG = false
 
   // val VIDEO_WIDTH     = 720
-  private val VIDEO_HEIGHT    = 1920 / 3 // 576
-  private val VIDEO_WIDTH_SQR = 1080 / 3 // 1024 // 1024 : 576 = 16 : 9
+  private val VIDEO_HEIGHT    = 1920 // / 3 // 576
+  private val VIDEO_WIDTH_SQR = 1080 // / 3 // 1024 // 1024 : 576 = 16 : 9
 
   private lazy val _initFont: Font = {
     //    val is  = Wolkenpumpe.getClass.getResourceAsStream("BellySansCondensed.ttf")
@@ -166,7 +166,7 @@ object Visual {
 
       visDo {
         wordMap.foreach { case (word, v) =>
-            v.dispose()
+          v.dispose()
         }
         wordMap = Map.empty
 
@@ -519,13 +519,15 @@ object Visual {
       // requireEDT()
       val bImg  = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
       val g     = bImg.createGraphics()
-      val scale = width.toDouble / VIDEO_WIDTH_SQR
+      // val scale = width.toDouble / VIDEO_WIDTH_SQR
       val p0 = new Point(0, 0)
       try {
         _dsp.damageReport() // force complete redrawing
-        _dsp.zoom(p0, scale)
+        // _dsp.zoom(p0, scale)
+        // actionAutoZoom.karlHeinz = scale
         _dsp.paintDisplay(g, new Dimension(width, height))
-        _dsp.zoom(p0, 1.0/scale)
+        // _dsp.zoom(p0, 1.0/scale)
+        // actionAutoZoom.karlHeinz = 1.0
         ImageIO.write(bImg, "png", file)
       } finally {
         g.dispose()
@@ -542,98 +544,116 @@ object Visual {
     }
 
     def saveFrameSeriesAsPNG(settings: VideoSettings): Processor[Unit] = {
-//      import settings._
-//      import ExecutionContext.Implicits.global
-//      val numVersions = cursorPos.single.get.size / 2
-//
-//      def toFrames(sec: Double) = (sec * framesPerSecond + 0.5).toInt
-//
-//      val framesPerIter = toFrames(secondsPerIteration)
-//      val framesDecay   = toFrames(secondsDecay)
-//      val framesSkip    = toFrames(secondsSkip)
-//      val numFrames   = numVersions * framesPerIter + framesDecay
-//      runAnimation    = false
-//      val child       = baseFile.base
-//      val parent      = baseFile.parent
-//
-//      forceSimulator.setSpeedLimit(speedLimit.toFloat)
-//
-//
-//      //      lazy val bImg  = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
-//      //      lazy val g     = bImg.createGraphics()
-//
-//      var initialized = false
-//
-//      Processor[Unit]("saveFrameSeriesAsPNG") { p =>
-//        var frame = 0
-//
-//        // def mkF() = parent / f"$child${frame - framesSkip}%05d.png"
-//        def mkF() = parent / f"$child${frame - framesSkip}%d.png"
-//
-//        while (frame < numFrames) {
-//          if (frame % framesPerIter == 0) /* execOnEDT */ {
-//            if (initialized) {
-//              previousIteration()
-//            } else {
-//              initChromosome(settings.chromosomeIndex)
-//              initialized = true
-//            }
-//          }
-//
-//          val frameSave = frame - framesSkip
-//          if (frameSave >= 0) {
-//            val f = mkF()
-//            execOnEDT {
-//              saveFrameAsPNG(f, width = width, height = height)
-//              // _dsp.damageReport() // force complete redrawing
-//              // _dsp.paintDisplay(g, new Dimension(width, height))
-//              // ImageIO.write(bImg, "png", f)
-//            }
-//          }
-//          execOnEDT {
-//            animationStep()
-//          }
-//          frame += 1
-//          println(s"frame $frame")
-//          p.progress = frame.toDouble / numFrames
-//          p.checkAborted()
-//        }
-//
-//        // now dissolve graph
-//        val m0 = map.snapshot.values
-//        println(s"VERTICES AT END: ${m0.size}")
-//        if (m0.nonEmpty) {
-//          import kollflitz.RandomOps._
-//          implicit val rnd = new util.Random(0L)
-//          val m = m0.toIndexedSeq.scramble()
-//          val framesPlop = toFrames(plopDur)
-//          // println(s"FRAMES-PLOP $framesPlop")
-//          @tailrec def loop(sq: Vec[VisualVertex]): Unit = sq match {
-//            case head +: tail =>
-//              // println(s"DISPOSE $head")
-//              algorithm.global.cursor.step { implicit tx =>
-//                head.dispose()
-//              }
-//              for (i <- 1 to framesPlop) {
-//                val f = mkF()
-//                execOnEDT {
-//                  saveFrameAsPNG(f, width = width, height = height)
-//                }
-//                execOnEDT {
-//                  animationStep()
-//                }
-//                frame += 1
-//              }
-//              loop(tail)
-//
-//            case _ =>
-//          }
-//          loop(m)
-//        }
-//
-//        // execOnEDT(g.dispose())
-//      }
-      ???
+      import settings.{text => _, _}
+      import ExecutionContext.Implicits.global
+
+      def toFrames(sec: Double) = (sec * framesPerSecond + 0.5).toInt
+
+      runAnimation    = false
+      val child       = baseFile.base
+      val parent      = baseFile.parent
+
+      forceSimulator.setSpeedLimit(speedLimit.toFloat)
+
+      var initialized = false
+
+      val framesSkip = 0
+
+      Processor[Unit]("saveFrameSeriesAsPNG") { p =>
+        var frame = 0
+
+        // def mkF() = parent / f"$child${frame - framesSkip}%05d.png"
+        def mkF() = parent / f"$child${frame - framesSkip}%d.png"
+
+        var startAnim = anim.head
+        var stopAnim  = startAnim
+        var animIdx   = 0
+
+        while (frame < numFrames) {
+          if (initialized) {
+
+          } else {
+            display.panAbs(settings.width * 0.5, settings.height * 0.5)
+            display.zoomAbs(new Point(0, 0), 0.1)
+            text = settings.text
+            initialized = true
+          }
+
+          import numbers.Implicits._
+          val animFrac = frame.clip(startAnim._1, stopAnim._1)
+            .linlin(startAnim._1, math.max(startAnim._1 + 1, stopAnim._1), 0, 1)
+
+          execOnEDT {
+            forceSimulator.getForces.foreach { force =>
+              val fName = force.getClass.getSimpleName
+              // println(s"----FORCE----$fName")
+              for (i <- 0 until force.getParameterCount) {
+                val pName = force.getParameterName(i)
+                val startValOpt = startAnim._2.getOrElse(fName, Map.empty).get(pName)
+                val stopValOpt  = startAnim._2.getOrElse(fName, Map.empty).get(pName)
+
+                val valOpt: Option[Float] = (startValOpt, stopValOpt) match {
+                  case (Some(startVal), Some(stopVal)) => Some(startVal * (1 - animFrac) + stopVal * animFrac)
+                  case _ => startValOpt orElse stopValOpt
+                }
+                valOpt.foreach { value =>
+                  force.setParameter(i, value)
+                }
+              }
+            }
+          }
+
+          val frameSave = frame - framesSkip
+          if (frameSave >= 0) {
+            val f = mkF()
+            execOnEDT {
+              saveFrameAsPNG(f, width = width, height = height)
+              // _dsp.damageReport() // force complete redrawing
+              // _dsp.paintDisplay(g, new Dimension(width, height))
+              // ImageIO.write(bImg, "png", f)
+            }
+          }
+          execOnEDT {
+            animationStep()
+          }
+
+          frame += 1
+
+          if (frame >= stopAnim._1) {
+            startAnim = stopAnim
+            animIdx += 1
+            if (animIdx < anim.size) stopAnim = anim(animIdx)
+          }
+
+          println(s"frame $frame")
+          p.progress = frame.toDouble / numFrames
+          p.checkAborted()
+        }
+
+        // now dissolve graph
+        import kollflitz.RandomOps._
+        implicit val rnd = new util.Random(0L)
+        val m0 = wordMap.values.flatMap(_.letters).toIndexedSeq.scramble()
+        // println(s"VERTICES AT END: ${m0.size}")
+
+        val m = m0.toIndexedSeq.scramble()
+        // println(s"FRAMES-PLOP $framesPlop")
+        @tailrec def loopPlop(sq: Vec[VisualVertex]): Unit = sq match {
+          case head +: tail =>
+            head.dispose()
+
+            val f = mkF()
+            saveFrameAsPNG(f, width = width, height = height)
+            animationStep()
+            frame += 1
+            loopPlop(tail)
+
+          case _ =>
+        }
+        loopPlop(m)
+
+        // execOnEDT(g.dispose())
+      }
     }
   }
 
