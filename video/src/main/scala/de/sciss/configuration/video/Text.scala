@@ -1,13 +1,16 @@
-package de.sciss.configuration.video
+package de.sciss.configuration
+package video
 
 import java.text.SimpleDateFormat
 import java.util.{Date, Locale}
 
 import de.sciss.configuration.video.text.VideoSettings
 import de.sciss.file._
+import de.sciss.kollflitz.Vec
 import de.sciss.processor.Processor
 import prefuse.util.ui.JForcePanel
 
+import scala.collection.breakOut
 import scala.swing.Swing._
 import scala.swing.event.ButtonClicked
 import scala.swing.{BorderPanel, Button, Component, FlowPanel, Frame, Orientation, ProgressBar, SplitPane, SwingApplication, ToggleButton}
@@ -46,6 +49,20 @@ object Text extends SwingApplication {
       v.saveFrameAsPNG(f, width = vs.width, height = vs.height)
     }
 
+    val ggParamSnap = Button("Parameter Snapshot") {
+      val vec: Vec[(String, String)] = v.forceParameters.map { case (name, values) =>
+        val pVec: Vec[(String, String)] = values.map { case (pName, pVal) =>
+          (pName, s"${pVal}f")
+        } (breakOut)
+        val s = pVec.sorted.map { case (pName, pVal) => s""""$pName" -> $pVal""" } .mkString("Map(", ", ", ")")
+        (name, s)
+      } (breakOut)
+
+      println(s"Layout count: ${v.layoutCounter}\n")
+      val tx = vec.sorted.map { case (name, values) => s""""$name" -> $values""" } .mkString("Map(\n  ", ",\n  ", "\n)")
+      println(tx)
+    }
+
     var seriesProc = Option.empty[Processor[Unit]]
 
     val ggProgress = new ProgressBar
@@ -76,7 +93,8 @@ object Text extends SwingApplication {
       }
     }
 
-    val pBottom = new FlowPanel(ggHead, ggPrevIter, ggRunAnim, ggStepAnim, ggSaveFrame, ggSaveFrameSeries, ggProgress)
+    val pBottom = new FlowPanel(ggHead, ggPrevIter, ggRunAnim, ggStepAnim, ggSaveFrame, ggSaveFrameSeries,
+      ggParamSnap, ggProgress)
 
     val fSim    = v.forceSimulator
     val fPanel  = new JForcePanel(fSim)

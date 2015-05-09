@@ -9,7 +9,7 @@ import prefuse.visual.VisualItem
 
 object BoxRenderer {
   final val MinBoxWidth         = 2 // 24
-  final val DefaultBoxHeight    = 20 // 18
+  final val DefaultBoxHeight    = 24 // 20 // 18
 
   def defaultFontMetrics: FontMetrics = Renderer.DEFAULT_GRAPHICS.getFontMetrics(Visual.condensedFont) // (Style.font)
 

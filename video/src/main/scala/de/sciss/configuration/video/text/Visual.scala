@@ -1,37 +1,34 @@
 package de.sciss.configuration.video.text
 
-import java.awt.geom.Point2D
 import java.awt.image.BufferedImage
 import java.awt.{Color, Font, LayoutManager, RenderingHints}
 import java.io.FileInputStream
-import java.util.concurrent.TimeUnit
 import javax.imageio.ImageIO
 import javax.swing.JPanel
 
 import de.sciss.file._
 import de.sciss.kollflitz
 import de.sciss.processor.Processor
-
 import prefuse.action.assignment.ColorAction
 import prefuse.action.layout.graph.ForceDirectedLayout
 import prefuse.action.{ActionList, RepaintAction}
 import prefuse.activity.Activity
 import prefuse.controls.{DragControl, PanControl, WheelZoomControl, ZoomControl}
 import prefuse.data.{Graph => PGraph}
-import prefuse.render.{DefaultRendererFactory, EdgeRenderer}
+import prefuse.render.DefaultRendererFactory
 import prefuse.util.ColorLib
-import prefuse.util.force.{DragForce, NBodyForce, ForceSimulator}
+import prefuse.util.force.{DragForce, Force, ForceSimulator, NBodyForce}
 import prefuse.visual.expression.InGroupPredicate
 import prefuse.visual.{VisualGraph, VisualItem}
 import prefuse.{Constants, Display, Visualization}
 
 import scala.annotation.tailrec
+import scala.collection.breakOut
 import scala.collection.immutable.{IndexedSeq => Vec}
 import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, Promise, ExecutionContext, blocking}
-import scala.swing.{Swing, Component, Dimension, Graphics2D, Rectangle}
+import scala.concurrent.{Await, ExecutionContext, Promise, blocking}
+import scala.swing.{Component, Dimension, Graphics2D, Rectangle, Swing}
 import scala.util.Try
-import scala.util.control.NonFatal
 
 object Visual {
   val DEBUG = false
@@ -94,12 +91,14 @@ object Visual {
     private[this] var _dsp: Display             = _
     private[this] var _g  : PGraph              = _
     private[this] var _vg : VisualGraph         = _
-    private[this] var _lay: ForceDirectedLayout = _
+    private[this] var _lay: MyForceDirectedLayout = _
     private[this] var actionColor: ActionList   = _
     private[this] var _runAnim = false
 
     private[this] var _text = ""
     private[this] var wordMap = Map.empty[String, Word]
+
+    private[this] var forces: Map[String, Force] = _
 
 //    private val cursorPos = Ref(cursorPos0)
 
@@ -160,7 +159,9 @@ object Visual {
 
       import kollflitz.Ops._
       val x0      = value.replace('\n', ' ').replace("  ", " ")
-      val words   = x0.toVector.groupWith((a, b) => a.isLetter == b.isLetter).map(_.mkString).toVector
+      val words   = x0.toVector.groupWith { (a, b) =>
+        a.isLetterOrDigit && b.isLetterOrDigit
+      } .map(_.mkString).toVector
       // val lines: Vec[Vec[String]] = words1.grouped(5).toVector
 
       visDo {
@@ -184,7 +185,7 @@ object Visual {
           w
         }
 
-        val maxWidth = 100
+        val maxWidth = 320 // 400
 
         @tailrec def mkLines(words: Vec[Word], rem: Vec[Word], width: Int, res: Vec[Line]): Vec[Line] = {
           def flush(): Line = {
@@ -198,7 +199,8 @@ object Visual {
             line
           }
 
-          if (width > maxWidth) { // note: we allow the last word to exceed the maximum width
+          // note: we allow the last word to exceed the maximum width
+          if (width > maxWidth && rem.headOption.map(_.letters.size).getOrElse(0) > 1) {
             val line = flush()
             mkLines(Vector.empty, rem, 0, res :+ line)
           } else rem match {
@@ -350,6 +352,7 @@ object Visual {
       sim.addForce(new MySpringForce)
       sim.addForce(new DragForce)
       _lay.setForceSimulator(sim)
+      forces = sim.getForces.map { f => (f.getClass.getSimpleName, f) } (breakOut)
 
       //      val forceMap = Map(
       //        ("NBodyForce" , "GravitationalConstant") -> -2.0f,
@@ -459,6 +462,15 @@ object Visual {
     }
 
     var component: Component = _
+
+    def forceParameters: Map[String, Map[String, Float]] = forces.map { case (name, force) =>
+      val values: Map[String, Float] = (0 until force.getParameterCount).map { i =>
+        (force.getParameterName(i), force.getParameter(i))
+      } (breakOut)
+      (name, values)
+    }
+
+    def layoutCounter: Int = _lay.counter
 
     def runAnimation: Boolean = _runAnim
     def runAnimation_=(value: Boolean): Unit = if (_runAnim != value) {
@@ -651,4 +663,8 @@ trait Visual {
   def saveFrameAsPNG(file: File, width: Int, height: Int): Unit
 
   def saveFrameSeriesAsPNG(settings: VideoSettings): Processor[Unit]
+
+  def forceParameters: Map[String, Map[String, Float]]
+
+  def layoutCounter: Int
 }

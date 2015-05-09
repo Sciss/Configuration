@@ -3,7 +3,7 @@ package de.sciss.configuration.video.text
 import prefuse.action.layout.graph.ForceDirectedLayout
 import prefuse.visual.EdgeItem
 
-class MyForceDirectedLayout(main: Visual, lineSpacing: Float = 30f)
+class MyForceDirectedLayout(main: Visual)
   extends ForceDirectedLayout(Visual.GROUP_GRAPH) {
 
   override def getSpringLength(e: EdgeItem): Float = {
@@ -16,9 +16,9 @@ class MyForceDirectedLayout(main: Visual, lineSpacing: Float = 30f)
           val res = vSrc.advance
           // println(s"ADVANCE = $res")
           res
-        } else lineSpacing
+        } else -1
       case _ =>
-        println("Oh noes!")
+        // println("Oh noes!")
         -1f
     }
   }
@@ -37,4 +37,13 @@ class MyForceDirectedLayout(main: Visual, lineSpacing: Float = 30f)
         -1f
     }
   }
+
+  private var _counter = 0
+
+  override def run(frac: Double): Unit = {
+    _counter += 1
+    super.run(frac)
+  }
+
+  def counter: Int = _counter
 }

@@ -175,7 +175,7 @@ trait VisualNodeImpl extends VisualNode /* with VisualDataImpl */ {
         // val x = ((r.getWidth - vvb.getWidth) * 0.5).toFloat
         // val y = ((r.getHeight + vvb.getHeight) * 0.5).toFloat
         val x = 2
-        val y = 2
+        val y = 12
 
         labelShape = v.getOutline(x, y)
         lastFontT = frcT

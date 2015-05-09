@@ -1,5 +1,7 @@
 package de.sciss.configuration.video.text
 
+import java.util.Random
+
 import prefuse.util.force.{Spring, SpringForce}
 
 object MySpringForce {
@@ -14,13 +16,17 @@ class MySpringForce extends SpringForce {
   private val VTORQUE       = HTORQUE + 1
   private val DISTANCE      = VTORQUE + 1
   private val VSPRING_COEFF = DISTANCE + 1
+  private val VSPRING_LENGTH = VSPRING_COEFF + 1
 
-  params    = params    ++ Array[Float](5e-5f, 5e-5f, -1f , 8.0e-5f)
-  minValues = minValues ++ Array[Float](0f   , 0f,    -1f , 0f     )
-  maxValues = maxValues ++ Array[Float](1e-3f, 1e-3f, 500f, 8.0e-3f)
+  private val rand = new Random(11223344L)
+
+  //                                    htorque vtorque distance vspring   vlength
+  params    = params    ++ Array[Float](5e-5f , 5e-5f , -1f    , 8.0e-5f,  100f)
+  minValues = minValues ++ Array[Float](0f    , 0f    , -1f    , 0f     ,    1f)
+  maxValues = maxValues ++ Array[Float](5e-3f , 5e-3f , 500f   , 8.0e-3f, 1000f)
 
   override def getParameterNames: Array[String] =
-    super.getParameterNames ++ Array("HTorque", "VTorque", "Limit", "VSpring")
+    super.getParameterNames ++ Array("HTorque", "VTorque", "Limit", "VSpring", "VLength")
 
   // https://stackoverflow.com/questions/1878907/the-smallest-difference-between-2-angles
   private def angleBetween(a: Float, b: Float): Float = {
@@ -29,9 +35,11 @@ class MySpringForce extends SpringForce {
   }
 
   override def getForce(s: Spring): Unit = {
+    val isHorizontal = s.coeff == 0f || s.coeff == 1f
+
     val item1   = s.item1
     val item2   = s.item2
-    val length  = if (s.length < 0) params(SpringForce.SPRING_LENGTH) else s.length
+    val length  = if (isHorizontal) s.length /* params(SpringForce.SPRING_LENGTH) */ else params(VSPRING_LENGTH)
     val x1      = item1.location(0)
     val y1      = item1.location(1)
     val x2      = item2.location(0)
@@ -40,16 +48,14 @@ class MySpringForce extends SpringForce {
     var dy      = y2 - y1
     val r0      = math.sqrt(dx * dx + dy * dy).toFloat
     val r1      = if (r0 == 0.0) {
-      dx  = (math.random.toFloat - 0.5f) / 50.0f
-      dy  = (math.random.toFloat - 0.5f) / 50.0f
+      dx  = (rand.nextFloat() /* math.random.toFloat */ - 0.5f) / 50.0f
+      dy  = (rand.nextFloat() /* math.random.toFloat */ - 0.5f) / 50.0f
       math.sqrt(dx * dx + dy * dy).toFloat
     } else r0
     val dist    = params(DISTANCE)
     val r       = if (dist < 0) r1 else math.min(dist, r1)
 
     val d       = r - length
-
-    val isHorizontal = s.coeff == 0f || s.coeff == 1f
 
     // val coeff   = (if (s.coeff < 0) params(SpringForce.SPRING_COEFF) else s.coeff) * d / r
     val coeff = if (isHorizontal) params(SpringForce.SPRING_COEFF) else params(VSPRING_COEFF)
