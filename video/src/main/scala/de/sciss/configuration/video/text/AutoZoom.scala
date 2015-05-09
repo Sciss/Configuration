@@ -6,7 +6,7 @@ import prefuse.Display
 import prefuse.action.Action
 import prefuse.util.GraphicsLib
 
-class AutoZoom(main: Visual) extends Action {
+class AutoZoom(main: Visual, frac: Double = 0.01, margin: Int = 20) extends Action {
   // var karlHeinz = 1.0
 
   def run(frac: Double): Unit = {
@@ -17,7 +17,6 @@ class AutoZoom(main: Visual) extends Action {
   private def zoom(bounds: Rectangle2D): Unit = {
     val d = main.display
     if (d.isTranformInProgress) return
-    val margin    = 50 // XXX could be customized
     GraphicsLib.expand(bounds, margin + (1 / d.getScale).toInt)
     fitViewToBounds(d, bounds)
   }
@@ -40,7 +39,6 @@ class AutoZoom(main: Visual) extends Action {
     //    val dx      = display.getDisplayX + w * 0.5 * ds
     //    val dy      = display.getDisplayY + h * 0.5 * ds
 
-    val frac    = 0.01
     // val fracI   = 1.0 - frac
 
     // val cx1     = cx // * frac // + dx * fracI

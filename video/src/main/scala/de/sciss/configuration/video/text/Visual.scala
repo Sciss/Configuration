@@ -30,7 +30,7 @@ import scala.swing.{Component, Dimension, Graphics2D, Rectangle, Swing}
 import scala.util.Try
 
 object Visual {
-  val DEBUG = false
+  val DEBUG = true
 
   // val VIDEO_WIDTH     = 720
   private val VIDEO_HEIGHT    = 1920 // / 3 // 576
@@ -547,7 +547,7 @@ object Visual {
       import settings.{text => _, _}
       import ExecutionContext.Implicits.global
 
-      def toFrames(sec: Double) = (sec * framesPerSecond + 0.5).toInt
+      // def toFrames(sec: Double) = (sec * framesPerSecond + 0.5).toInt
 
       runAnimation    = false
       val child       = baseFile.base
@@ -590,14 +590,17 @@ object Visual {
               for (i <- 0 until force.getParameterCount) {
                 val pName = force.getParameterName(i)
                 val startValOpt = startAnim._2.getOrElse(fName, Map.empty).get(pName)
-                val stopValOpt  = startAnim._2.getOrElse(fName, Map.empty).get(pName)
+                val stopValOpt  = stopAnim ._2.getOrElse(fName, Map.empty).get(pName)
 
                 val valOpt: Option[Float] = (startValOpt, stopValOpt) match {
                   case (Some(startVal), Some(stopVal)) => Some(startVal * (1 - animFrac) + stopVal * animFrac)
                   case _ => startValOpt orElse stopValOpt
                 }
                 valOpt.foreach { value =>
-                  force.setParameter(i, value)
+                  if (force.getParameter(i) != value) {
+                    if (DEBUG) println(s"$fName - $pName - $value")
+                    force.setParameter(i, value)
+                  }
                 }
               }
             }
