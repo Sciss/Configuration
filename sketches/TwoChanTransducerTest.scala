@@ -13,3 +13,15 @@ val x = play {
 
 x.set("bus" -> 1)
 
+
+// nine
+
+val x = play {
+  val amps  = "amp".kr(Seq.fill(9)(1f))
+  val triF  = (1 to 9).map(_.linlin(1, 9, 0.05, 0.13)): GE
+  val tri   = LFTri.ar(triF).squared
+  val pulF  = (1 to 9).map(_.linlin(1, 9, 18, 26))
+  val sig   = WhiteNoise.ar(amps * 0.1) * LFPulse.ar("freq".ar(pulF)) * tri
+  sig
+}
+
