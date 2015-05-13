@@ -30,3 +30,15 @@ lazy val video = Project(
     )
   )
 )
+
+lazy val sound = Project(
+  id        = s"$baseNameL-sound",
+  base      = file("sound"),
+  settings  = commonSettings ++ Seq(
+    name        := s"$baseName-sound",
+    description := "Sound installation",
+    libraryDependencies ++= Seq(
+      "de.sciss"  %% "soundprocesses-core"  % "2.18.0"
+    )
+  )
+)

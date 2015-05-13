@@ -1,5 +1,5 @@
 /*
- *  Disposable.scala
+ *  Configuration.scala
  *  (Configuration)
  *
  *  Copyright (c) 2015 Hanns Holger Rutz. All rights reserved.
@@ -11,8 +11,8 @@
  *  contact@sciss.de
  */
 
-package de.sciss.configuration.video.text
+package de.sciss.configuration
 
-trait Disposable {
-  def dispose(): Unit
+object Configuration {
+
 }
