@@ -51,8 +51,9 @@ trait AssembleLike {
     }
 
     val frames = movieDir.children.flatMap(f => getFrame(f.name).map(_ -> f)).sortBy(_._1)
-    require(frames.head._1 == 1)
-    val num = frames.last._1
+    val startFrame = frames.head._1
+    require(startFrame == 0 || startFrame == 1)
+    val num = frames.last._1 - startFrame + 1
     require(frames.size == num)  // fail if frames are missing
 
     log(s"Putting $num frames of '${movieDir.name}'.")
