@@ -38,7 +38,8 @@ lazy val sound = Project(
     name        := s"$baseName-sound",
     description := "Sound installation",
     libraryDependencies ++= Seq(
-      "de.sciss"  %% "soundprocesses-core"  % "2.18.0"
+      "de.sciss"  %% "soundprocesses-core"  % "2.18.0",
+      "de.sciss"  %% "lucrestm-bdb"         % "2.1.1"
     )
   )
 )

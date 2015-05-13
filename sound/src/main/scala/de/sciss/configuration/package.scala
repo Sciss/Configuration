@@ -1,5 +1,5 @@
 /*
- *  Configuration.scala
+ *  package.scala
  *  (Configuration)
  *
  *  Copyright (c) 2015 Hanns Holger Rutz. All rights reserved.
@@ -11,12 +11,9 @@
  *  contact@sciss.de
  */
 
-package de.sciss.configuration
+package de.sciss
 
-object Configuration {
-  def main(args: Array[String]): Unit = {
-
-  }
-
-  val numTransducers = 9
+package object configuration {
+  type Vec[+A]  = scala.collection.immutable.IndexedSeq[A]
+  val  Vec      = scala.collection.immutable.IndexedSeq
 }
