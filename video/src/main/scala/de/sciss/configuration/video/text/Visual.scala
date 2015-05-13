@@ -102,7 +102,16 @@ object Visual {
 
     private[this] var forces: Map[String, Force] = _
 
-//    private val cursorPos = Ref(cursorPos0)
+    private[this] var _autoZoom = true
+
+    def autoZoom: Boolean = _autoZoom
+    def autoZoom_=(value: Boolean): Unit = if (_autoZoom != value) {
+      _autoZoom = value
+      runAnimation = !runAnimation
+      runAnimation = !runAnimation
+    }
+
+    //    private val cursorPos = Ref(cursorPos0)
 
 //    def initChromosome(idx: Int): Unit =
 //      algorithm.global.cursor.step { implicit tx =>
@@ -160,7 +169,7 @@ object Visual {
     def text_=(value: String): Unit = if (_text != value) {
       visDo {
         stopAnimation()
-        setText(text)
+        setText(value)
         startAnimation()
       }
     }
@@ -508,7 +517,7 @@ object Visual {
           new ActionList()
         }
       actionLayout.add(_lay)
-      actionLayout.add(actionAutoZoom)
+      if (autoZoom) actionLayout.add(actionAutoZoom)
       // actionLayout.add(new PrefuseAggregateLayout(AGGR_PROC))
       actionLayout.add(new RepaintAction())
       actionLayout.setVisualization(_vis)
@@ -725,4 +734,6 @@ trait Visual {
   def forceParameters: Map[String, Map[String, Float]]
 
   def layoutCounter: Int
+
+  var autoZoom: Boolean
 }

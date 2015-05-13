@@ -80,6 +80,8 @@ trait AssembleLike {
     val res = cmd.!
     require(res == 0, s"avconv failed ($res)")
 
+    Seq("rm", "-r", outFrameDir.absolutePath).!  // no need to keep these sym-links
+
     log("Done.")
   }
 }

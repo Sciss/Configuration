@@ -20,13 +20,23 @@ object Text extends SwingApplication {
   def startup(args: Array[String]): Unit = {
     val v = text.Visual()
 
-    val ggHead = Button("Head") {
-      // v.initChromosome(100)
-      v.text = text.Text1.text
+    val textObj = args.headOption.getOrElse("text1") match {
+      case "text1"  => text.Text1
+      case "text2"  => text.Text2
     }
 
-    val ggPrevIter = Button("Prev Iter") {
-      // v.previousIteration()
+    val ggHead = Button("Head") {
+      // v.initChromosome(100)
+      v.text = textObj.text
+    }
+
+    val ggAutoZoom = new ToggleButton("Zoom") {
+      selected = true
+      listenTo(this)
+      reactions += {
+        case ButtonClicked(_) =>
+          v.autoZoom = selected
+      }
     }
 
     val ggRunAnim = new ToggleButton("Run Animation") {
@@ -73,9 +83,9 @@ object Text extends SwingApplication {
         require(dir.isDirectory)
         val cfg       = VideoSettings()
         cfg.baseFile  = dir / "frame"
-        cfg.anim      = text.Text1.anim
-        cfg.text      = text.Text1.text
-        cfg.numFrames = cfg.anim.last._1 + cfg.framesPerSecond * 60 // 120
+        cfg.anim      = textObj.anim
+        cfg.text      = textObj.text
+        cfg.numFrames = cfg.anim.last._1 + cfg.framesPerSecond * textObj.tail // 120
         cfg.baseFile
 
         val p         = v.saveFrameSeriesAsPNG(cfg)
@@ -95,7 +105,7 @@ object Text extends SwingApplication {
     }
 
     val pBottom = new BoxPanel(Orientation.Vertical) {
-      contents += new FlowPanel(ggHead     , ggPrevIter       , ggRunAnim  , ggStepAnim)
+      contents += new FlowPanel(ggHead     , ggAutoZoom       , ggRunAnim  , ggStepAnim)
       contents += new FlowPanel(ggSaveFrame, ggSaveFrameSeries, ggParamSnap, ggProgress)
     }
     val fSim    = v.forceSimulator
@@ -109,7 +119,7 @@ object Text extends SwingApplication {
     split.resizeWeight        = 1.0
 
     new Frame {
-      title     = "MutagenTx"
+      title     = "Text"
       contents  = new BorderPanel {
         add(split   , BorderPanel.Position.Center)
         add(pBottom , BorderPanel.Position.South)

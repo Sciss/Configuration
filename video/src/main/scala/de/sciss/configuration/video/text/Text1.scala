@@ -1,6 +1,6 @@
 package de.sciss.configuration.video.text
 
-object Text1 {
+object Text1 extends TextLike {
   // Text (C)opyright Hanns Holger Rutz. Provided through a Creative Commons license
   // 'Attribution-NonCommerical-NoDerivs 3.0 Unported'
   // https://creativecommons.org/licenses/by-nc-nd/3.0/
@@ -24,6 +24,8 @@ object Text1 {
       |are outside the control of the artist. My hypothesis is that just as the essence of an artwork’s
       |reception lies in the process of its traversal, the same goes for the production of an artwork.
       |""".stripMargin
+
+  val tail = 60
 
   val anim: Anim = Vector(
   0 ->
