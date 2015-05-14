@@ -14,17 +14,21 @@
 package de.sciss.configuration
 
 import java.awt.Color
+import java.text.SimpleDateFormat
+import java.util.{Date, Locale}
 import javax.swing.{JFrame, SwingUtilities, SpinnerNumberModel}
 
 import de.sciss.audiowidgets.Transport
+import de.sciss.file._
 import de.sciss.lucre.data.gui.SkipQuadtreeView
 import de.sciss.lucre.geom.{IntDistanceMeasure2D, IntPoint2D}
 import de.sciss.lucre.stm
 import de.sciss.lucre.stm.TxnLike
 import de.sciss.lucre.swing.impl.ComponentHolder
 import de.sciss.lucre.swing.{View, deferTx}
-import de.sciss.lucre.synth.{Bus, Synth, Sys, Txn}
+import de.sciss.lucre.synth.{Buffer, Bus, Synth, Sys, Txn}
 import de.sciss.swingplus.{OverlayPanel, Spinner}
+import de.sciss.synth.io.{AudioFileType, SampleFormat}
 import de.sciss.synth.swing.j.JServerStatusPanel
 import de.sciss.synth.{addAfter, Server, SynthGraph, addToHead, addToTail}
 import de.sciss.{numbers, synth}
@@ -120,6 +124,36 @@ object ControlView {
       }
     }
 
+    private def recordSound(): Unit = {
+      stopSynth()
+      // IRCAM, because if the server crashes we don't need to fiddle
+      // around with incomplete AIFF headers.
+      val fileFormat = new SimpleDateFormat(s"'rec'-yyMMdd'_'HHmmss'.irc'", Locale.US)
+      val f = file("rec") / fileFormat.format(new Date())
+      val synOpt = cursor.step { implicit tx =>
+        infraOption.map { inf =>
+          val graph = SynthGraph {
+            import synth._; import ugen._
+            FreeSelf.kr("gate".kr(1f) <= 0) // because stopSynth uses `release`
+            DiskOut.ar("buf".kr, In.ar("bus".kr, 2))
+          }
+          val path  = f.absolutePath
+          println(s"Recording to '$path'")
+          val buf   = Buffer.diskOut(inf.server)(path = path, fileType = AudioFileType.IRCAM,
+            sampleFormat = SampleFormat.Float, numChannels = 2)
+          val syn   = Synth.play(graph)(target = inf.server.defaultGroup /* masterGroup */,
+            addAction = addToTail /* addAfter */, dependencies = buf :: Nil)
+          syn.onEndTxn { implicit tx =>
+            println("Recording done.")
+            buf.dispose()
+            println("Aqui.")
+          }
+          syn
+        }
+      }
+      synthsPlaying = synOpt.toList
+    }
+
     private def guiInit(quadH: stm.Source[S#Tx, Tpe[S]], boidRate0: Double): Unit = {
 
       quadView  = new SkipQuadtreeView[S, PlacedNode](quadH, cursor, _.coord)
@@ -153,7 +187,8 @@ object ControlView {
         }
       }
 
-      val soundTransport = Transport.makeButtonStrip(Seq(Transport.Stop(stopSynth()), Transport.Play(playSynth())))
+      val soundTransport = Transport.makeButtonStrip(Seq(
+        Transport.Stop(stopSynth()), Transport.Play(playSynth()), Transport.Record(recordSound())))
 
       // quadView.scale = 240.0 / extent
       val quadComp  = Component.wrap(quadView)
