@@ -13,11 +13,11 @@
 
 package de.sciss.configuration
 
-import de.sciss.lucre.synth.{BusNodeSetter, Synth, Bus, Group, Server, Txn}
+import de.sciss.lucre.synth.{Sys, Bus, Group, Server, Synth, Txn}
 import de.sciss.osc.TCP
 import de.sciss.synth
-import de.sciss.synth.{addToTail, addAfter, ugen, SynthGraph}
 import de.sciss.synth.proc.AuralSystem
+import de.sciss.synth.{SynthGraph, addAfter, addBefore, addToTail}
 
 import scala.concurrent.ExecutionContext
 
@@ -38,6 +38,7 @@ object Configuration {
   def run(): Unit = {
     val quad = QuadGraphDB.open()
     import quad.cursor
+
     import sys.process._
     Seq("killall", "scsynth").!
     cursor.step { implicit tx =>
@@ -48,7 +49,7 @@ object Configuration {
     }
   }
 
-  def boot(view: ControlView[D])(implicit tx: D#Tx): Unit = {
+  def boot[S <: Sys[S]](view: ControlView[S])(implicit tx: S#Tx): Unit = {
     val sCfg = Server.Config()
     sCfg.deviceName         = Some("Configuration")
     // sCfg.audioBusChannels
@@ -59,31 +60,44 @@ object Configuration {
     sCfg.transport  = TCP
     sCfg.pickPort()
     val aural = AuralSystem()
+
+    def started(s: Server)(implicit tx: S#Tx): Unit = {
+      val graphNorm = SynthGraph {
+        import synth._
+        import ugen._
+        val in      = In.ar("in".kr, 1)
+        val normDur = 2.0
+        val ceil    = -0.2.dbamp
+        val sig0    = Normalizer.ar(in, level = ceil, dur = normDur)
+        // sig0.poll(sig0.abs > 1, label = "NORM")
+        // val sig     = Limiter.ar(sig0, level = -0.2.dbamp)
+        val sig = LeakDC.ar(sig0.clip(-ceil, ceil))
+        sig .poll(sig .abs > 1, label = "LIM ")
+        // val sig = sig0
+        Out.ar("out".kr, sig)
+      }
+
+      val normGroup   = Group(s.defaultGroup)
+      val masterGroup = Group(normGroup, addAfter)
+      val channels    = Vec.tabulate(numTransducers) { i =>
+        val group = Group(normGroup, addBefore)
+        val bus   = Bus.audio(s, 1)
+        new Infra.Channel(i, group, bus)
+      }
+      val infra = new Infra(server = s, channels = channels, masterGroup = masterGroup, normGroup = normGroup)
+
+      channels.foreach { ch =>
+        val syn = Synth.play(graphNorm, nameHint = Some("norm"))(target = normGroup, addAction = addToTail,
+          args = List("out" -> ch.index))
+        syn.read(ch.bus -> "in")
+      }
+
+      view.infra = infra
+    }
+
     aural.addClient(new AuralSystem.Client {
       def auralStarted(s: Server)(implicit tx: Txn): Unit = {
-        val graphNorm = SynthGraph {
-          import synth._
-          import ugen._
-          val in      = In.ar("in".kr, 1)
-          val normDur = 2.0
-          val sig     = Normalizer.ar(in, level = -0.2.dbamp, dur = normDur)
-          Out.ar("out".kr, sig)
-        }
-
-        val inGroup     = Group(s.defaultGroup)
-        val normGroup   = Group(inGroup  , addAfter)
-        val masterGroup = Group(normGroup, addAfter)
-        val inBuses     = Vec.fill(numTransducers)(Bus.audio(s, 1))
-        val infra       = new Infra(server = s, inGroup = inGroup, masterGroup = masterGroup,
-          normGroup = normGroup, inBuses = inBuses)
-
-        inBuses.zipWithIndex.foreach { case (inBus, idx) =>
-          val syn = Synth.play(graphNorm, nameHint = Some("norm"))(target = normGroup, addAction = addToTail,
-            args = List("out" -> idx))
-          syn.read(inBus -> "in")
-        }
-
-        view.infra = infra
+        tx.afterCommit(view.cursor.step { implicit tx => started(s) })
       }
 
       def auralStopped()(implicit tx: Txn): Unit = {

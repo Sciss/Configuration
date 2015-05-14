@@ -63,7 +63,7 @@ object ControlView {
   private final class Impl[S <: Sys[S]](boids: BoidProcess[S], quad: QuadGraphDB[S], meterView: AudioBusMeter[S])
     extends ControlView[S] with ComponentHolder[Component] {
 
-    import quad.cursor
+    def cursor: stm.Cursor[S] = quad.cursor
 
     private[this] var boidsState: BoidProcess.State = _
     private[this] var quadView  : SkipQuadtreeView[S, PlacedNode] = _
@@ -90,38 +90,38 @@ object ControlView {
     private def startBoids(): Unit = cursor.step { implicit tx => boids.start() }
     private def stopBoids (): Unit = cursor.step { implicit tx => boids.stop () }
 
-    private def guiInit(quadH: stm.Source[S#Tx, Tpe[S]], boidRate0: Double): Unit = {
+    var synthsPlaying = List.empty[Synth]
 
-      var synthOpt = Option.empty[Synth]
+    private def stopSynth(): Unit = if (synthsPlaying.nonEmpty) {
+      cursor.step { implicit tx =>
+        synthsPlaying.foreach { synth =>
+          if (synth.server.peer.isRunning) synth.release(3.0) // free()
+        }
+      }
+      synthsPlaying = Nil
+    }
+
+    private def playSynth(): Unit = {
+      stopSynth()
+      for {
+        s    <- Try(Server.default).toOption
+        node <- quadView.highlight.headOption
+      } {
+        val graph = node.node.input.graph // node.chromosome.graph
+        // val df    = SynthDef("test", graph.expand(DefaultUGenGraphBuilderFactory))
+        val x = cursor.step { implicit tx =>
+            val syn = Synth.play(graph)(target = infra.channels.head.group, addAction = addToHead)
+            syn.write(infra.channels.head.bus -> "out")
+            syn
+          }
+        synthsPlaying = x :: Nil
+      }
+    }
+
+    private def guiInit(quadH: stm.Source[S#Tx, Tpe[S]], boidRate0: Double): Unit = {
 
       quadView  = new SkipQuadtreeView[S, PlacedNode](quadH, cursor, _.coord)
       quadView.setBorder(Swing.EmptyBorder(Boid.excess, Boid.excess, Boid.excess, Boid.excess))
-
-      def stopSynth(): Unit = {
-        synthOpt.foreach { synth =>
-          synthOpt = None
-          cursor.step { implicit tx =>
-            if (synth.server.peer.isRunning) synth.release(3.0) // free()
-          }
-        }
-      }
-
-      def playSynth(): Unit = {
-        stopSynth()
-        for {
-          s    <- Try(Server.default).toOption
-          node <- quadView.highlight.headOption
-        } {
-          val graph = node.node.input.graph // node.chromosome.graph
-          // val df    = SynthDef("test", graph.expand(DefaultUGenGraphBuilderFactory))
-          val x = cursor.step { implicit tx =>
-            val syn = Synth.play(graph)(target = infra.inGroup, addAction = addToHead)
-            syn.write(infra.inBuses(4) -> "out")
-            syn
-          }
-          synthOpt = Some(x)
-        }
-      }
 
       pStatus = new JServerStatusPanel(JServerStatusPanel.COUNTS)
       //      def boot(): Unit = {
@@ -157,6 +157,21 @@ object ControlView {
             val r = mBoidRate.getNumber.doubleValue()
             quad.cursor.step { implicit tx =>
               boids.period = r
+            }
+        }
+      }
+
+      val ggAuralBoids = new ToggleButton("Run") {
+        listenTo(this)
+        reactions += {
+          case ButtonClicked(_) =>
+            val sel = selected
+            quad.cursor.step { implicit tx =>
+              implicit val itx = tx.peer
+              auralBoidsOn() = sel
+              auralBoidsRef().foreach { ab =>
+                if (sel) ab.start() else ab.stop()
+              }
             }
         }
       }
@@ -212,7 +227,7 @@ object ControlView {
         }
       }
 
-      val tp1 = new FlowPanel(ggQuadVis, new Label("Boids:"), ggBoidRate, ggPrintBoids, boidsTransport)
+      val tp1 = new FlowPanel(ggQuadVis, new Label("Boids:"), ggAuralBoids, ggBoidRate, ggPrintBoids, boidsTransport)
       val tp2 = new FlowPanel(new Label("Server:"), ggHP, Component.wrap(pStatus), butKill, new Label("Sound:"),
         soundTransport)
       val tp = new BoxPanel(Orientation.Vertical) {
@@ -271,30 +286,25 @@ object ControlView {
           }
       }
 
-      //      def topPaint(h: QuadView.PaintHelper): Unit = {
-      //        import h.g2
-      //        //        g2.setColor(Color.green)
-      //        //        g2.drawLine(0, 0, 100,   0)
-      //        //        g2.drawLine(0, 0,   0, 100)
-      //        // h.translate(-Boid.excess, -Boid.excess)
-      //        boidsState.foreach(_.paint(g2))
-      //      }
-
-      // quadView.topPainter = Some(topPaint _)
-
       component = mainPane
     }
 
-    private val infraRef = Ref(Option.empty[Infra])
+    private val infraRef      = Ref(Option.empty[Infra])
+    private val auralBoidsRef = Ref(Option.empty[AuralBoids[S]])
+    private val auralBoidsOn  = Ref(initialValue = false)
 
     private def infraOption(implicit tx: Txn): Option[Infra] = infraRef.get(tx.peer)
 
-    def infra(implicit tx: Txn): Infra = infraRef.get(tx.peer).getOrElse(sys.error("infra was not set yet"))
+    def infra(implicit tx: S#Tx): Infra = infraRef.get(tx.peer).getOrElse(sys.error("infra was not set yet"))
 
-    def infra_=(value: Infra)(implicit tx: Txn): Unit = {
-      infraRef.set(Some(value))(tx.peer)
+    def infra_=(value: Infra)(implicit tx: S#Tx): Unit = {
+      implicit val itx = tx.peer
+      infraRef() = Some(value)
       val strip = AudioBusMeter.Strip(Bus.soundOut(value.server, Configuration.numTransducers), value.masterGroup, addToTail)
       meterView.strips = Vector(strip)
+      val auralBoids = AuralBoids(infra, boids, quad)
+      auralBoidsRef.swap(Some(auralBoids)).foreach(_.dispose())
+      if (auralBoidsOn()) auralBoids.start()
       deferTx {
         pStatus.server = Some(value.server.peer)
         SwingUtilities.getWindowAncestor(component.peer) match {
@@ -304,7 +314,7 @@ object ControlView {
     }
   }
 }
-trait ControlView[S <: Sys[S]] extends View[S] {
-  def infra(implicit tx: Txn): Infra
-  def infra_=(value: Infra)(implicit tx: Txn): Unit
+trait ControlView[S <: Sys[S]] extends View.Cursor[S] {
+  def infra(implicit tx: S#Tx): Infra
+  def infra_=(value: Infra)(implicit tx: S#Tx): Unit
 }

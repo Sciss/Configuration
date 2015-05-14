@@ -38,7 +38,7 @@ object BoidProcess {
     new Impl(state0, Scheduler[S])
   }
 
-  private final class Impl[S <: Sys[S]](state0: State, sched: Scheduler[S]) 
+  private final class Impl[S <: Sys[S]](state0: State, val scheduler: Scheduler[S])
     extends BoidProcess[S] with ObservableImpl[S, State] {
     
     private val stateRef      = Ref(state0)
@@ -47,7 +47,7 @@ object BoidProcess {
     // private val startFrameRef = Ref(0L)
     private implicit val random = TxnRandom.plain(0L)
 
-    def cursor: stm.Cursor[S] = sched.cursor
+    def cursor: stm.Cursor[S] = scheduler.cursor
 
     def state(implicit tx: S#Tx): State = stateRef.get(tx.peer)
 
@@ -65,10 +65,10 @@ object BoidProcess {
     }
     
     private def sched1()(implicit tx: S#Tx): Unit = {
-      val nowFrame    = sched.time  // we don't care about jitter and cumulative drift
+      val nowFrame    = scheduler.time  // we don't care about jitter and cumulative drift
       val numFrames   = (periodRef.get(tx.peer) * Timeline.SampleRate).toLong
       val execFrame   = nowFrame + numFrames
-      val token       = sched.schedule(execFrame) { implicit tx: S#Tx =>
+      val token       = scheduler.schedule(execFrame) { implicit tx: S#Tx =>
         step()
         if (isRunning) sched1()
       }
@@ -77,7 +77,7 @@ object BoidProcess {
 
     def stop ()(implicit tx: S#Tx): Unit = {
       val token = tokenRef.swap(-1)(tx.peer)
-      if (token >= 0) sched.cancel(token)
+      if (token >= 0) scheduler.cancel(token)
     }
 
     def isRunning(implicit tx: S#Tx): Boolean = tokenRef.get(tx.peer) >= 0
@@ -103,4 +103,6 @@ trait BoidProcess[S <: Sys[S]] extends Observable[S#Tx, BoidProcess.State] with 
   /** Iterations per second. */
   def period(implicit tx: S#Tx): Double
   def period_=(value: Double)(implicit tx: S#Tx): Unit
+
+  def scheduler: Scheduler[S]
 }

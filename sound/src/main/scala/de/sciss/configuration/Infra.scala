@@ -15,5 +15,8 @@ package de.sciss.configuration
 
 import de.sciss.lucre.synth.{Group, AudioBus, Server}
 
-class Infra(val server: Server, val inGroup: Group, val inBuses: Vec[AudioBus], val normGroup: Group,
+object Infra {
+  class Channel(val index: Int, val group: Group, val bus: AudioBus)
+}
+class Infra(val server: Server, val channels: Vec[Infra.Channel], val normGroup: Group,
             val masterGroup: Group)
