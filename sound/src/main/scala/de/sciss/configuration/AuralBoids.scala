@@ -42,17 +42,17 @@ object AuralBoids {
     }
 
     private def stepChan(ch: Infra.Channel)(implicit tx: S#Tx): Unit = {
-      val layer = 0 // XXX TODO
-      val q   = quad.handles(layer).apply()
-      val loc = boids.state.apply(ch.index).location
-      val pt  = IntPoint2D((loc.x + 0.5f).toInt, (loc.y + 0.5f).toInt)
+      val layer         = 0 // XXX TODO
+      val q             = quad.handles(layer).apply()
+      val loc           = boids.state.apply(ch.index).location
+      val pt            = IntPoint2D((loc.x + 0.5f).toInt, (loc.y + 0.5f).toInt)
       q.nearestNeighborOption(pt, IntDistanceMeasure2D.euclideanSq).foreach { node =>
         val graph = node.node.input.graph
         val syn = Synth.play(graph)(target = ch.group, addAction = addToHead)
         syn.write(ch.bus -> "out")
       }
       import numbers.Implicits._
-      val delaySeconds  = math.random.linexp(0, 1, 4.0, 12.0) // XXX TODO
+      val delaySeconds  = math.random.linexp(0, 1, 4.0, 30.0)
       val delayFrames   = (delaySeconds * Timeline.SampleRate).toLong
       val sched         = boids.scheduler
       val absFrames     = sched.time + delayFrames

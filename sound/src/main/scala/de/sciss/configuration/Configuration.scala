@@ -67,11 +67,12 @@ object Configuration {
         import ugen._
         val in      = In.ar("in".kr, 1)
         val normDur = 2.0
-        val ceil    = -0.2.dbamp
-        val sig0    = Normalizer.ar(in, level = ceil, dur = normDur)
+        val ceil1   = -1.0.dbamp
+        val ceil2   = -0.2.dbamp
+        val sig0    = Normalizer.ar(in, level = ceil1, dur = normDur)
         // sig0.poll(sig0.abs > 1, label = "NORM")
         // val sig     = Limiter.ar(sig0, level = -0.2.dbamp)
-        val sig = LeakDC.ar(sig0.clip(-ceil, ceil))
+        val sig = LeakDC.ar(sig0.clip(-ceil1, ceil1)).clip(-ceil2, ceil2)
         sig .poll(sig .abs > 1, label = "LIM ")
         // val sig = sig0
         Out.ar("out".kr, sig)

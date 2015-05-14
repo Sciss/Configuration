@@ -142,7 +142,15 @@ object ControlView {
       }
 
       // pStatus.bootAction = Some(boot)
-      val boidsTransport = Transport.makeButtonStrip(Seq(Transport.Stop(stopBoids()), Transport.Play(startBoids())))
+      // val boidsTransport = Transport.makeButtonStrip(Seq(Transport.Stop(stopBoids()), Transport.Play(startBoids())))
+      val boidsTransport = new ToggleButton("Sim") {
+        listenTo(this)
+        reactions += {
+          case ButtonClicked(_) =>
+            if (selected) startBoids() else stopBoids()
+        }
+      }
+
       val soundTransport = Transport.makeButtonStrip(Seq(Transport.Stop(stopSynth()), Transport.Play(playSynth())))
 
       // quadView.scale = 240.0 / extent
@@ -161,7 +169,7 @@ object ControlView {
         }
       }
 
-      val ggAuralBoids = new ToggleButton("Run") {
+      val ggAuralBoids = new ToggleButton("Aural") {
         listenTo(this)
         reactions += {
           case ButtonClicked(_) =>
