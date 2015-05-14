@@ -17,12 +17,8 @@ final case class ConfigOut(in: GE) extends UGenSource.ZeroOut with WritesBus {
     val sig2  = Limiter.ar(LeakDC.ar(sig1), -0.2.dbamp)
     val sig3  = HPF.ar(sig2, 20)
     val sig = if (ConfigOut.NO_NORMALIZE) sig3 else {
-      val env = EnvGen.ar(Env.asr, gate = "gate".kr(1f), doneAction = doNothing /* freeSelf */)
-      val doneEnv = Done.kr(env)
-      val normDur = 2.0
-      val tFree = TDelay.kr(doneEnv, normDur)
-      FreeSelf.kr(tFree)
-      Normalizer.ar(sig3, level = -0.2.dbamp, dur = normDur) * DelayN.ar(env, normDur, normDur)
+      val env = EnvGen.ar(Env.asr, gate = "gate".kr(1f), doneAction = freeSelf)
+      sig3 * env
     }
     val bus   = "out".kr(0f)
     Out.ar(bus, sig)

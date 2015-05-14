@@ -1,5 +1,5 @@
 /*
- *  View.scala
+ *  ControlView.scala
  *  (Configuration)
  *
  *  Copyright (c) 2015 Hanns Holger Rutz. All rights reserved.
@@ -14,27 +14,28 @@
 package de.sciss.configuration
 
 import java.awt.Color
+import javax.swing.SpinnerNumberModel
 
 import de.sciss.audiowidgets.Transport
-import de.sciss.lucre.data.gui.{QuadView, SkipQuadtreeView}
+import de.sciss.lucre.data.gui.SkipQuadtreeView
 import de.sciss.lucre.geom.{IntDistanceMeasure2D, IntPoint2D}
 import de.sciss.lucre.stm
 import de.sciss.lucre.swing.impl.ComponentHolder
 import de.sciss.lucre.swing.{View, deferTx}
-import de.sciss.lucre.synth.Sys
-import de.sciss.numbers
-import de.sciss.swingplus.OverlayPanel
-import de.sciss.synth.impl.DefaultUGenGraphBuilderFactory
-import de.sciss.synth.swing.ServerStatusPanel
-import de.sciss.synth.{Server, ServerConnection, Synth, SynthDef}
+import de.sciss.lucre.synth.{Synth, Sys, Txn}
+import de.sciss.swingplus.{OverlayPanel, Spinner}
+import de.sciss.synth.swing.j.JServerStatusPanel
+import de.sciss.synth.{Server, ServerConnection, SynthGraph, addToHead, addToTail}
+import de.sciss.{numbers, synth}
 
-import scala.swing.event.{ButtonClicked, MousePressed}
-import scala.swing.{Graphics2D, ToggleButton, Swing, Label, BorderPanel, Button, Component, FlowPanel, Frame}
+import scala.concurrent.stm.Ref
+import scala.swing.Swing._
+import scala.swing.event.{ButtonClicked, MousePressed, ValueChanged}
+import scala.swing.{BoxPanel, Orientation, BorderPanel, Button, Component, FlowPanel, Frame, Graphics2D, Label, Swing, ToggleButton}
 import scala.util.Try
-import Swing._
 
 object ControlView {
-  import QuadGraphDB.{PlacedNode, Tpe, extent}
+  import QuadGraphDB.{PlacedNode, Tpe}
   
   def apply[S <: Sys[S]](boids: BoidProcess[S], quad: QuadGraphDB[S])(implicit tx: S#Tx): ControlView[S] = {
     val res = new Impl(boids, quad).init()
@@ -66,11 +67,14 @@ object ControlView {
     private[this] var boidsState: BoidProcess.State = _
     private[this] var quadView  : SkipQuadtreeView[S, PlacedNode] = _
     private[this] var boidsComp : Component = _
+    private[this] var pStatus   : JServerStatusPanel = _
+    private[this] var hpSynth   = Option.empty[Synth]
 
     def init()(implicit tx: S#Tx): this.type = {
       val quadH = quad.handles.head // XXX TODO
       boidsState = boids.state
-      deferTx(guiInit(quadH))
+      val boidRate0 = boids.period
+      deferTx(guiInit(quadH, boidRate0 = boidRate0))
       boids.react { implicit tx => state =>
         boidsState = state
         deferTx(boidsComp.repaint())
@@ -83,18 +87,20 @@ object ControlView {
     private def startBoids(): Unit = cursor.step { implicit tx => boids.start() }
     private def stopBoids (): Unit = cursor.step { implicit tx => boids.stop () }
 
-    private def guiInit(quadH: stm.Source[S#Tx, Tpe[S]]): Unit = {
+    private def guiInit(quadH: stm.Source[S#Tx, Tpe[S]], boidRate0: Double): Unit = {
 
       var synthOpt = Option.empty[Synth]
-
-      import de.sciss.synth.Ops._
 
       quadView  = new SkipQuadtreeView[S, PlacedNode](quadH, cursor, _.coord)
       quadView.setBorder(Swing.EmptyBorder(Boid.excess, Boid.excess, Boid.excess, Boid.excess))
 
-      def stopSynth(): Unit = synthOpt.foreach { synth =>
-        synthOpt = None
-        if (synth.server.isRunning) synth.release(3.0) // free()
+      def stopSynth(): Unit = {
+        synthOpt.foreach { synth =>
+          synthOpt = None
+          cursor.step { implicit tx =>
+            if (synth.server.peer.isRunning) synth.release(3.0) // free()
+          }
+        }
       }
 
       def playSynth(): Unit = {
@@ -104,23 +110,27 @@ object ControlView {
           node <- quadView.highlight.headOption
         } {
           val graph = node.node.input.graph // node.chromosome.graph
-          val df    = SynthDef("test", graph.expand(DefaultUGenGraphBuilderFactory))
-          val x     = df.play(s, args = Seq("out" -> 1))
+          // val df    = SynthDef("test", graph.expand(DefaultUGenGraphBuilderFactory))
+          val x = cursor.step { implicit tx =>
+            val syn = Synth.play(graph)(target = infra.inGroup, addAction = addToHead)
+            syn.write(infra.inBuses(4) -> "out")
+            syn
+          }
           synthOpt = Some(x)
         }
       }
 
-      val pStatus = new ServerStatusPanel
-      def boot(): Unit = {
-        val cfg = Server.Config()
-        cfg.memorySize = 256 * 1024
-        cfg.pickPort()
-        val connect = Server.boot(config = cfg) {
-          case ServerConnection.Running(s) =>
-          case ServerConnection.Aborted    =>
-        }
-        pStatus.booting = Some(connect)
-      }
+      pStatus = new JServerStatusPanel(JServerStatusPanel.COUNTS)
+      //      def boot(): Unit = {
+      //        val cfg = Server.Config()
+      //        cfg.memorySize = 256 * 1024
+      //        cfg.pickPort()
+      //        val connect = Server.boot(config = cfg) {
+      //          case ServerConnection.Running(s) =>
+      //          case ServerConnection.Aborted    =>
+      //        }
+      //        pStatus.booting = Some(connect)
+      //      }
 
       val butKill = Button("Kill") {
         import scala.sys.process._
@@ -128,13 +138,25 @@ object ControlView {
         "killall scsynth".!
       }
 
-      pStatus.bootAction = Some(boot)
+      // pStatus.bootAction = Some(boot)
       val boidsTransport = Transport.makeButtonStrip(Seq(Transport.Stop(stopBoids()), Transport.Play(startBoids())))
       val soundTransport = Transport.makeButtonStrip(Seq(Transport.Stop(stopSynth()), Transport.Play(playSynth())))
 
       // quadView.scale = 240.0 / extent
       val quadComp  = Component.wrap(quadView)
       quadComp.visible = false
+
+      val mBoidRate = new SpinnerNumberModel(boidRate0, 0.01, 1, 0.01)
+      val ggBoidRate = new Spinner(mBoidRate) {
+        listenTo(this)
+        reactions += {
+          case ValueChanged(_) =>
+            val r = mBoidRate.getNumber.doubleValue()
+            quad.cursor.step { implicit tx =>
+              boids.period = r
+            }
+        }
+      }
 
       val ggQuadVis = new ToggleButton("Quad Vis") {
         listenTo(this)
@@ -144,14 +166,56 @@ object ControlView {
         }
       }
 
+      val ggHP = new ToggleButton("Headphones") {
+        listenTo(this)
+        reactions += {
+          case ButtonClicked(_) =>
+            hpSynth.foreach { syn =>
+              quad.cursor.step { implicit tx =>
+                syn.release()
+              }
+              hpSynth = None
+            }
+            if (selected) {
+              val graphHP = SynthGraph {
+                import synth._
+                import ugen._
+                val in    = In.ar(0, Configuration.numTransducers)
+                val pan   = SplayAz.ar(numChannels = 2, in = in)
+                val limDur = 0.01
+                val env    = new Env(0.0, Vec[Env.Segment](
+                  (limDur, 0.0, Curve.linear),
+                  (0.2, 1.0, Curve.sine), (0.2, 0.0, Curve.sine), (limDur, 0.0, Curve.linear)), 2)
+                // val fade  = EnvGen.ar(Env.asr(0.2, 1, 0.2, Curve.linear), gate = "gate".kr(1f), doneAction = freeSelf)
+                val fade = EnvGen.ar(env, gate = "gate".kr(1f), doneAction = freeSelf)
+                XOut.ar(0, Limiter.ar(pan / Configuration.numTransducers, level = -0.2.dbamp, dur = limDur), fade)
+              }
+              val syn = quad.cursor.step { implicit tx =>
+                Synth.play(graphHP, nameHint = Some("hp"))(target = infra.masterGroup, addAction = addToTail)
+              }
+              hpSynth = Some(syn)
+            }
+        }
+      }
+
       val ggPrintBoids = Button("Print") {
         boidsState.zipWithIndex.foreach { case (boid, id) =>
           println(s"$id: $boid")
         }
+        cursor.step { implicit tx =>
+          infraOption.foreach { infra =>
+            infra.server.peer.dumpTree(controls = true)
+          }
+        }
       }
 
-      val tp = new FlowPanel(ggQuadVis, new Label("Boids:"), ggPrintBoids, boidsTransport, pStatus, butKill,
-        new Label("Sound:"), soundTransport)
+      val tp1 = new FlowPanel(ggQuadVis, new Label("Boids:"), ggBoidRate, ggPrintBoids, boidsTransport)
+      val tp2 = new FlowPanel(new Label("Server:"), ggHP, Component.wrap(pStatus), butKill, new Label("Sound:"),
+        soundTransport)
+      val tp = new BoxPanel(Orientation.Vertical) {
+        contents += tp1
+        contents += tp2
+      }
 
       boidsComp = new Component {
         preferredSize = (Boid.width, Boid.height)
@@ -174,13 +238,14 @@ object ControlView {
         add(overlay , BorderPanel.Position.Center)
       }
 
-      quadComp.listenTo(quadComp.mouse.clicks)
-      val insets = quadView.getInsets
-      quadComp.reactions += {
+      val mouseComp = boidsComp // quadComp
+      mouseComp.listenTo(mouseComp.mouse.clicks)
+      // val insets = quadView.getInsets
+      mouseComp.reactions += {
         case MousePressed(_, pt, mod, clicks, _) =>
           import numbers.Implicits._
-          val x = ((pt.x - insets.left) / quadView.scale + 0.5).toInt.clip(0, extent << 1)
-          val y = ((pt.y - insets.top ) / quadView.scale + 0.5).toInt.clip(0, extent << 1)
+          val x = (pt.x / quadView.scale + 0.5).toInt.clip(0, Boid.width )
+          val y = (pt.y / quadView.scale + 0.5).toInt.clip(0, Boid.height)
 
           val nodeOpt = cursor.step { implicit tx =>
             val q = quadH()
@@ -209,8 +274,22 @@ object ControlView {
 
       component = mainPane
     }
+
+    private val infraRef = Ref(Option.empty[Infra])
+
+    private def infraOption(implicit tx: Txn): Option[Infra] = infraRef.get(tx.peer)
+
+    def infra(implicit tx: Txn): Infra = infraRef.get(tx.peer).getOrElse(sys.error("infra was not set yet"))
+
+    def infra_=(value: Infra)(implicit tx: Txn): Unit = {
+      infraRef.set(Some(value))(tx.peer)
+      deferTx {
+        pStatus.server = Some(value.server.peer)
+      }
+    }
   }
 }
 trait ControlView[S <: Sys[S]] extends View[S] {
-
+  def infra(implicit tx: Txn): Infra
+  def infra_=(value: Infra)(implicit tx: Txn): Unit
 }
