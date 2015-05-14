@@ -12,24 +12,20 @@ object Vector2D {
 }
 final case class Vector2D(x: Float, y: Float) {
   def + (that: Vector2D): Vector2D = Vector2D(this.x + that.x, this.y + that.y)
-
   def - (that: Vector2D): Vector2D = Vector2D(this.x - that.x, this.y - that.y)
 
   def * (scalar: Float): Vector2D = Vector2D(x * scalar, y * scalar)
-
   def / (scalar: Float): Vector2D = Vector2D(x / scalar, y / scalar)
 
-  def mag: Float = math.sqrt(x*x + y*y).toFloat
-
   def magSq: Float = x*x + y*y
+  def mag  : Float = math.sqrt(magSq).toFloat
 
-  def isEmpty: Boolean = x == 0f && y == 0f
-
+  def isEmpty : Boolean = x == 0f && y == 0f
   def nonEmpty: Boolean = !isEmpty
 
   def normalize: Vector2D = {
     val m = mag
-    if (m != 0 && m != 1) this / m else this
+    if (m == 0 || m == 1) this else this / m
   }
 
   def limit(max: Float): Vector2D = if (magSq <= max*max) this else normalize * max
@@ -127,7 +123,6 @@ final class Boid(val location: Vector2D, val velocity: Vector2D) {
   def paint(g: Graphics2D): Unit = {
     // Draw a triangle rotated in the direction of velocity
     val theta = velocity.heading + math.Pi/2
-    // heading2D() above is now heading() but leaving old syntax until Processing.js catches up
 
     val atOrig = g.getTransform
     g.translate(location.x, location.y)
@@ -170,10 +165,6 @@ final class Boid(val location: Vector2D, val velocity: Vector2D) {
 
     // As long as the vector is greater than 0
     if (steer.nonEmpty) {
-      // First two lines of code below could be condensed with new Location setMag() method
-      // Not using this method until Processing.js catches up
-      // steer.setMag(maxspeed);
-
       // Implement Reynolds: Steering = Desired - Velocity
       (steer.normalize * maxSpeed - velocity).limit(maxForce)
     }
