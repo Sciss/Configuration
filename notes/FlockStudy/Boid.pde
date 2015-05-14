@@ -5,11 +5,9 @@ class Boid {
   PVector location;
   PVector velocity;
   PVector acceleration;
-  float r;
-  float maxforce;    // Maximum steering force
-  float maxspeed;    // Maximum speed
+  float r = 2f;  // drawing radius
 
-    Boid(float x, float y) {
+  Boid(float x, float y) {
     acceleration = new PVector(0, 0);
 
     // This is a new PVector method not yet implemented in JS
@@ -20,9 +18,6 @@ class Boid {
     velocity = new PVector(cos(angle), sin(angle));
 
     location = new PVector(x, y);
-    r = 2.0;
-    maxspeed = 2;
-    maxforce = 0.03;
   }
 
   void run(ArrayList<Boid> boids) {
@@ -43,9 +38,9 @@ class Boid {
     PVector ali = align(boids);      // Alignment
     PVector coh = cohesion(boids);   // Cohesion
     // Arbitrarily weight these forces
-    sep.mult(1.5);
-    ali.mult(1.0);
-    coh.mult(1.0);
+    sep.mult(separationWeight);
+    ali.mult(alignmentWeight);
+    coh.mult(coherenceWeight);
     // Add the force vectors to acceleration
     applyForce(sep);
     applyForce(ali);
@@ -57,7 +52,7 @@ class Boid {
     // Update velocity
     velocity.add(acceleration);
     // Limit speed
-    velocity.limit(maxspeed);
+    velocity.limit(maxSpeed);
     location.add(velocity);
     // Reset accelertion to 0 each cycle
     acceleration.mult(0);
@@ -69,7 +64,7 @@ class Boid {
     PVector desired = PVector.sub(target, location);  // A vector pointing from the location to the target
     // Scale to maximum speed
     desired.normalize();
-    desired.mult(maxspeed);
+    desired.mult(maxSpeed);
 
     // Above two lines of code below could be condensed with new PVector setMag() method
     // Not using this method until Processing.js catches up
@@ -77,7 +72,7 @@ class Boid {
 
     // Steering = Desired minus Velocity
     PVector steer = PVector.sub(desired, velocity);
-    steer.limit(maxforce);  // Limit to maximum steering force
+    steer.limit(maxForce);  // Limit to maximum steering force
     return steer;
   }
 
@@ -132,13 +127,11 @@ class Boid {
   // Separation
   // Method checks for nearby boids and steers away
   PVector separate (ArrayList<Boid> boids) {
-    float desiredseparation = 25.0f;
-    float wallSeparation = 25.0f;
     PVector steer = new PVector(0, 0, 0);
     int count = 0;
     // For every boid in the system, check if it's too close
     for (Boid other : boids) {
-      if (separationStep(steer, other.location, desiredseparation)) count++;
+      if (separationStep(steer, other.location, boidSeparation)) count++;
     }
     PVector wall = new PVector(0, 0, 0);
     wall.x = 0;
@@ -165,9 +158,9 @@ class Boid {
 
       // Implement Reynolds: Steering = Desired - Velocity
       steer.normalize();
-      steer.mult(maxspeed);
+      steer.mult(maxSpeed);
       steer.sub(velocity);
-      steer.limit(maxforce);
+      steer.limit(maxForce);
     }
     return steer;
   }
@@ -175,12 +168,11 @@ class Boid {
   // Alignment
   // For every nearby boid in the system, calculate the average velocity
   PVector align (ArrayList<Boid> boids) {
-    float neighbordist = 50;
     PVector sum = new PVector(0, 0);
     int count = 0;
     for (Boid other : boids) {
       float d = PVector.dist(location, other.location);
-      if ((d > 0) && (d < neighbordist)) {
+      if ((d > 0) && (d < neighborDist)) {
         sum.add(other.velocity);
         count++;
       }
@@ -193,9 +185,9 @@ class Boid {
 
       // Implement Reynolds: Steering = Desired - Velocity
       sum.normalize();
-      sum.mult(maxspeed);
+      sum.mult(maxSpeed);
       PVector steer = PVector.sub(sum, velocity);
-      steer.limit(maxforce);
+      steer.limit(maxForce);
       return steer;
     } 
     else {
@@ -206,12 +198,11 @@ class Boid {
   // Cohesion
   // For the average location (i.e. center) of all nearby boids, calculate steering vector towards that location
   PVector cohesion (ArrayList<Boid> boids) {
-    float neighbordist = 50;
     PVector sum = new PVector(0, 0);   // Start with empty vector to accumulate all locations
     int count = 0;
     for (Boid other : boids) {
       float d = PVector.dist(location, other.location);
-      if ((d > 0) && (d < neighbordist)) {
+      if ((d > 0) && (d < neighborDist)) {
         sum.add(other.location); // Add location
         count++;
       }
