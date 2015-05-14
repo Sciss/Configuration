@@ -54,9 +54,12 @@ object AuralBoids {
         val graph = node.node.input.graph
         val syn = Synth.play(graph)(target = ch.group, addAction = addToHead)
         syn.write(ch.bus -> "out")
+        syn.definition.dispose()  // XXX TODO - safe to do this here immediately?
         playingNodes += node
         syn.onEndTxn { implicit tx =>
+          implicit val itx = tx.peer
           playingNodes -= node
+          // println(s"playingNodes.size = ${playingNodes.size}")
         }
       }
       import numbers.Implicits._

@@ -20,6 +20,7 @@ import de.sciss.synth.proc.AuralSystem
 import de.sciss.synth.{SynthGraph, addAfter, addBefore, addToTail}
 
 import scala.concurrent.ExecutionContext
+import scala.concurrent.stm.Ref
 
 object Configuration {
   final val numTransducers = 9
@@ -99,13 +100,17 @@ object Configuration {
     }
 
     aural.addClient(new AuralSystem.Client {
+      private val lastServer = Ref.make[Server]
+
       def auralStarted(s: Server)(implicit tx: Txn): Unit = {
+        lastServer.set(s)(tx.peer)
         tx.afterCommit(view.cursor.step { implicit tx => started(s) })
       }
 
       def auralStopped()(implicit tx: Txn): Unit = {
         println("AuralSystem stopped.")
         if (!orderlyQuit) {
+          lastServer.get(tx.peer).peer.dispose()
           view.auralBoidsOption.foreach(_.debugPrint())
         }
       }

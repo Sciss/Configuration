@@ -29,9 +29,9 @@ object BoidProcess {
   type State = Vec[Boid]
 
   def apply[S <: Sys[S]](implicit tx: S#Tx, cursor: stm.Cursor[S]): BoidProcess[S] = {
+    val x0      = util.Random.nextFloat * Boid.width
+    val y0      = util.Random.nextFloat * Boid.height
     val state0 = Vec.fill(Configuration.numTransducers) {
-      val x0      = util.Random.nextFloat * Boid.width
-      val y0      = util.Random.nextFloat * Boid.height
       val angle0  = util.Random.nextFloat * math.Pi * 2
       Boid(x0, y0, angle0)
     }
