@@ -14,7 +14,7 @@
 package de.sciss.configuration
 
 import java.awt.Color
-import javax.swing.SpinnerNumberModel
+import javax.swing.{JFrame, SwingUtilities, SpinnerNumberModel}
 
 import de.sciss.audiowidgets.Transport
 import de.sciss.lucre.data.gui.SkipQuadtreeView
@@ -22,23 +22,24 @@ import de.sciss.lucre.geom.{IntDistanceMeasure2D, IntPoint2D}
 import de.sciss.lucre.stm
 import de.sciss.lucre.swing.impl.ComponentHolder
 import de.sciss.lucre.swing.{View, deferTx}
-import de.sciss.lucre.synth.{Synth, Sys, Txn}
+import de.sciss.lucre.synth.{Bus, Synth, Sys, Txn}
 import de.sciss.swingplus.{OverlayPanel, Spinner}
 import de.sciss.synth.swing.j.JServerStatusPanel
-import de.sciss.synth.{Server, ServerConnection, SynthGraph, addToHead, addToTail}
+import de.sciss.synth.{addAfter, Server, SynthGraph, addToHead, addToTail}
 import de.sciss.{numbers, synth}
 
 import scala.concurrent.stm.Ref
 import scala.swing.Swing._
 import scala.swing.event.{ButtonClicked, MousePressed, ValueChanged}
-import scala.swing.{BoxPanel, Orientation, BorderPanel, Button, Component, FlowPanel, Frame, Graphics2D, Label, Swing, ToggleButton}
+import scala.swing.{BorderPanel, BoxPanel, Button, Component, FlowPanel, Frame, Graphics2D, Label, Orientation, Swing, ToggleButton}
 import scala.util.Try
 
 object ControlView {
   import QuadGraphDB.{PlacedNode, Tpe}
   
   def apply[S <: Sys[S]](boids: BoidProcess[S], quad: QuadGraphDB[S])(implicit tx: S#Tx): ControlView[S] = {
-    val res = new Impl(boids, quad).init()
+    val meterView = AudioBusMeter[S]
+    val res = new Impl(boids, quad, meterView).init()
     deferTx {
       new Frame {
         title     = "Configuration"
@@ -59,7 +60,7 @@ object ControlView {
     res
   }
 
-  private final class Impl[S <: Sys[S]](boids: BoidProcess[S], quad: QuadGraphDB[S])
+  private final class Impl[S <: Sys[S]](boids: BoidProcess[S], quad: QuadGraphDB[S], meterView: AudioBusMeter[S])
     extends ControlView[S] with ComponentHolder[Component] {
 
     import quad.cursor
@@ -82,7 +83,9 @@ object ControlView {
       this
     }
 
-    def dispose()(implicit tx: S#Tx): Unit = ()
+    def dispose()(implicit tx: S#Tx): Unit = {
+      meterView.dispose()
+    }
 
     private def startBoids(): Unit = cursor.step { implicit tx => boids.start() }
     private def stopBoids (): Unit = cursor.step { implicit tx => boids.stop () }
@@ -191,7 +194,7 @@ object ControlView {
                 XOut.ar(0, Limiter.ar(pan / Configuration.numTransducers, level = -0.2.dbamp, dur = limDur), fade)
               }
               val syn = quad.cursor.step { implicit tx =>
-                Synth.play(graphHP, nameHint = Some("hp"))(target = infra.masterGroup, addAction = addToTail)
+                Synth.play(graphHP, nameHint = Some("hp"))(target = infra.masterGroup, addAction = addAfter /* addToTail */)
               }
               hpSynth = Some(syn)
             }
@@ -233,9 +236,16 @@ object ControlView {
         contents += quadComp
       }
 
+      val pMeter = new BoxPanel(Orientation.Vertical) {
+        contents += Swing.VGlue
+        contents += meterView.component
+        contents += Swing.VGlue
+      }
+
       val mainPane = new BorderPanel {
         add(tp      , BorderPanel.Position.North )
         add(overlay , BorderPanel.Position.Center)
+        add(pMeter  , BorderPanel.Position.East  )
       }
 
       val mouseComp = boidsComp // quadComp
@@ -283,8 +293,13 @@ object ControlView {
 
     def infra_=(value: Infra)(implicit tx: Txn): Unit = {
       infraRef.set(Some(value))(tx.peer)
+      val strip = AudioBusMeter.Strip(Bus.soundOut(value.server, Configuration.numTransducers), value.masterGroup, addToTail)
+      meterView.strips = Vector(strip)
       deferTx {
         pStatus.server = Some(value.server.peer)
+        SwingUtilities.getWindowAncestor(component.peer) match {
+          case jf: JFrame => jf.pack()
+        }
       }
     }
   }
