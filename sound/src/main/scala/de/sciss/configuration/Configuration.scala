@@ -13,10 +13,35 @@
 
 package de.sciss.configuration
 
+import scala.concurrent.ExecutionContext
+
 object Configuration {
   def main(args: Array[String]): Unit = {
+    if (args.headOption == Some("--make")) {
+      val proc = QuadGraphDB.make()
+      idleThread()
+      import ExecutionContext.Implicits.global
+      proc.onComplete(_ => sys.exit())
+    } else {
+      run()
+    }
+  }
+
+  def run(): Unit = {
+    val quad = QuadGraphDB.open()
+    import quad.cursor
+    cursor.step { implicit tx =>
+      val boids = BoidProcess[D]
+      ControlView(boids, quad)
+    }
+  }
+
+  def boot(): Unit = {
 
   }
 
   val numTransducers = 9
 }
+//trait Configuration {
+//  def mainBus: AudioBus
+//}

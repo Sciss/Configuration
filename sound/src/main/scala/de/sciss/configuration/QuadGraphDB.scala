@@ -18,41 +18,105 @@ import de.sciss.lucre.data.DeterministicSkipOctree
 import de.sciss.lucre.geom.IntSpace.TwoDim
 import de.sciss.lucre.geom.{IntPoint2D, IntSpace, IntSquare}
 import de.sciss.lucre.stm
+import de.sciss.lucre.stm.Disposable
 import de.sciss.lucre.stm.store.BerkeleyDB
-import de.sciss.serial.{DataInput, DataOutput, ImmutableSerializer}
+import de.sciss.lucre.synth.Sys
+import de.sciss.processor.Processor
+import de.sciss.serial.{Serializer, DataInput, DataOutput, ImmutableSerializer}
 import de.sciss.synth.SynthGraph
-import de.sciss.synth.proc.{SynthGraphs, Durable}
+import de.sciss.synth.proc.{Durable, SynthGraphs}
+
+import scala.concurrent.{ExecutionContext, blocking}
 
 object QuadGraphDB {
-  type D    = Durable
-  type Tpe  = DeterministicSkipOctree[D, Dim, PlacedNode]
-  type Dim  = IntSpace.TwoDim
+  type Tpe[S <: Sys[S]] = DeterministicSkipOctree[S, Dim, PlacedNode]
+  type Dim              = IntSpace.TwoDim
 
-  val baseDirectory = userHome / "Documents" / "devel" / "MutagenTx" / "database"
+  private val singleBaseDirectory = userHome / "Documents" / "devel" / "MutagenTx" / "database"
 
   final val extent  = 256
 
-  final val names   = Vec(
+  private final val singleNames = Vec(
     "betanovuss0", "betanovuss1", "betanovuss2",
     "betanovussSchrauben", "betanovussStairs",
     "zaubes2"
   )
 
-  final val numNames  = names.size
+  private final val singleNumNames  = singleNames.size
 
-  def open(name: String): QuadGraphDB = {
-    val somDir = baseDirectory / s"${name}_som"
-    implicit val dur            = Durable(BerkeleyDB.factory(somDir))
-    implicit val pointView      = (n: PlacedNode, tx: D#Tx) => n.coord
-    implicit val placedNodeSer  = PlacedNode.serializer // why is it not found found, Scala!?
-    implicit val octreeSer      = DeterministicSkipOctree.serializer[D, Dim, PlacedNode]
+  private def pointView[S <: Sys[S]]: (PlacedNode, S#Tx) => IntPoint2D = (n, tx) => n.coord
+
+  private implicit def treeSerializer[S <: Sys[S]]: Serializer[S#Tx, S#Acc, DeterministicSkipOctree[S, Dim, PlacedNode]] = {
+    implicit val placedNodeSer = PlacedNode.serializer // why is it not found found, Scala!?
+    implicit val pv = pointView[S]
+    DeterministicSkipOctree.serializer[S, Dim, PlacedNode]
+  }
+
+  private def openSingle(name: String): SingleDB = {
+    val somDir = singleBaseDirectory / s"${name}_som"
+    implicit val dur = Durable(BerkeleyDB.factory(somDir))
     val quadH = dur.root { implicit tx =>
-      DeterministicSkipOctree.empty[D, Dim, PlacedNode](IntSquare(extent, extent, extent))
+      emptyTree[D]
     }
 
-    new QuadGraphDB {
-      val system: D = dur
-      val handle: stm.Source[D#Tx, Tpe] = quadH
+    new SingleDB(dur, quadH)
+  }
+
+  private def emptyTree[S <: Sys[S]](implicit tx: S#Tx): Tpe[S] = {
+    implicit val pv = pointView[S]
+    DeterministicSkipOctree.empty[S, Dim, PlacedNode](IntSquare(extent, extent, extent))
+  }
+
+  private final class SingleDB(val system: D, handle: stm.Source[D#Tx, Tpe[D]]) {
+    def getAll: Vec[PlacedNode] = system.step { implicit tx =>
+      handle().iterator.toIndexedSeq
+    }
+  }
+
+  private val baseDirectory = file("database")
+  private val dbFile        = baseDirectory / "quad"
+
+  def make(): Processor[Unit] = {
+    import ExecutionContext.Implicits.global
+    if (dbFile.exists()) {
+      println(s"QuadGraphDB - database file '$dbFile' already exists. Not overwriting.")
+      return Processor[Unit]("no-op")(_ => ())
+    }
+
+    implicit val dur = Durable(BerkeleyDB.factory(dbFile))
+    val vecH = dur.root { implicit tx =>
+      Vec.fill(singleNumNames)(emptyTree[D])
+    }
+    val res = Processor[Unit]("make-quad") { self =>
+      singleNames.zipWithIndex.foreach { case (name, idx) =>
+        blocking {
+          val nodes = openSingle(name).getAll
+          dur.step { implicit tx =>
+            val tree = vecH().apply(idx)
+            nodes.foreach(tree.add)
+          }
+        }
+        self.progress = (idx + 1).toDouble / singleNumNames
+        self.checkAborted()
+      }
+    }
+
+    res.monitor()
+    res
+  }
+
+  def open(): QuadGraphDB[D] = {
+    implicit val dur = Durable(BerkeleyDB.factory(dbFile))
+    val vecH = dur.root { implicit tx =>
+      sys.error("should exists") : Vec[Tpe[D]]
+    }
+    new QuadGraphDB[D] {
+      val system: D             = dur
+      val cursor: stm.Cursor[D] = dur
+
+      val handles: Vec[stm.Source[D#Tx, Tpe[D]]] = dur.step { implicit tx =>
+        vecH().map(tx.newHandle(_))
+      }
     }
   }
 
@@ -171,8 +235,11 @@ object QuadGraphDB {
   }
   case class PlacedNode(coord: IntPoint2D, node: Node)
 }
-trait QuadGraphDB {
-  import QuadGraphDB.D
-  implicit val system: D
-  val handle: stm.Source[D#Tx, QuadGraphDB.Tpe]
+trait QuadGraphDB[S <: Sys[S]] extends Disposable[S#Tx] {
+  implicit val system: S
+  implicit val cursor: stm.Cursor[S]
+
+  def handles: Vec[stm.Source[S#Tx, QuadGraphDB.Tpe[S]]]
+
+  def dispose()(implicit tx: S#Tx): Unit = tx.afterCommit(system.close())
 }

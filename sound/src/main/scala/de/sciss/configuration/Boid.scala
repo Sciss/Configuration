@@ -65,7 +65,7 @@ object Boid {
   val width   = (extent + excess) * 2
   val height  = width
 
-  val drawRadius  = 1.0f
+  val drawRadius  = 2.0f
 
   val scaleFactor = 0.5f
 
@@ -132,8 +132,9 @@ final class Boid(val location: Vector2D, val velocity: Vector2D) {
     shape.lineTo(-drawRadius, drawRadius*2)
     shape.lineTo(drawRadius, drawRadius*2)
     shape.closePath()
-    g.setColor(Color.white)
-    g.draw(shape)
+    g.setColor(Color.blue)
+    // g.draw(shape)
+    g.fill(shape)
     g.setTransform(atOrig)
   }
 
