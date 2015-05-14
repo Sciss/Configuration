@@ -1,12 +1,11 @@
 /**
  * Flocking 
- * by Daniel Shiffman.  
+ * Original code by Daniel Shiffman.
+ * Adapted by Hanns Holger Rutz. 
  * 
  * An implementation of Craig Reynold's Boids program to simulate
  * the flocking behavior of birds. Each boid steers itself based on 
  * rules of avoidance, alignment, and coherence.
- * 
- * Click the mouse to add a new boid.
  */
 
 Flock flock;
@@ -27,7 +26,7 @@ float maxSpeed = 2f * scaleFactor; // Maximum speed
 
 // separation
 float boidSeparation = 25.0f * scaleFactor;
-float wallSeparation = excess * 1.5f * scaleFactor;
+float wallSeparation = excess * 1.5f; // * scaleFactor;
 
 // coherence and alignment
 float neighborDist = 50f * scaleFactor;

@@ -5,7 +5,7 @@ class Boid {
   PVector location;
   PVector velocity;
   PVector acceleration;
-  float r = 2f;  // drawing radius
+  float r = 1f;  // drawing radius
 
   Boid(float x, float y) {
     acceleration = new PVector(0, 0);
