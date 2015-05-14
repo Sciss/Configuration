@@ -3,6 +3,7 @@ package de.sciss.configuration
 import java.awt.{Color, Graphics2D}
 import java.awt.geom.{Path2D, GeneralPath}
 
+import de.sciss.lucre.confluent.TxnRandom
 import de.sciss.numbers
 
 import scala.concurrent.stm.InTxn
@@ -11,14 +12,24 @@ object Vector2D {
   val empty = Vector2D(0f, 0f)
 }
 final case class Vector2D(x: Float, y: Float) {
-  def + (that: Vector2D): Vector2D = Vector2D(this.x + that.x, this.y + that.y)
-  def - (that: Vector2D): Vector2D = Vector2D(this.x - that.x, this.y - that.y)
+  def + (that: Vector2D): Vector2D =
+    if (this.isEmpty) that else if (that.isEmpty) this
+    else Vector2D(this.x + that.x, this.y + that.y)
 
-  def * (scalar: Float): Vector2D = Vector2D(x * scalar, y * scalar)
-  def / (scalar: Float): Vector2D = Vector2D(x / scalar, y / scalar)
+  def - (that: Vector2D): Vector2D =
+    if (that.isEmpty) this
+    else Vector2D(this.x - that.x, this.y - that.y)
+
+  def * (scalar: Float): Vector2D =
+    if (isEmpty) this else if (scalar == 0f) Vector2D.empty
+    else Vector2D(x * scalar, y * scalar)
+
+  def / (scalar: Float): Vector2D =
+    if (isEmpty) this
+    else Vector2D(x / scalar, y / scalar)
 
   def magSq: Float = x*x + y*y
-  def mag  : Float = math.sqrt(magSq).toFloat
+  def mag  : Float = if (isEmpty) 0f else math.sqrt(magSq).toFloat
 
   def isEmpty : Boolean = x == 0f && y == 0f
   def nonEmpty: Boolean = !isEmpty
@@ -30,6 +41,9 @@ final case class Vector2D(x: Float, y: Float) {
 
   def limit(max: Float): Vector2D = if (magSq <= max*max) this else normalize * max
 
+  //  def flipX: Vector2D = if (x == 0) this else Vector2D(-x,  y)
+  //  def flipY: Vector2D = if (y == 0) this else Vector2D( x, -y)
+
   def clip(xMin: Float, yMin: Float, xMax: Float, yMax: Float): Vector2D = {
     import numbers.Implicits._
     val inside = x >= xMin && x <= xMax && y >= yMin && y <= yMax
@@ -37,10 +51,12 @@ final case class Vector2D(x: Float, y: Float) {
     else Vector2D(x.clip(xMin, xMax), y.clip(yMin, xMax))
   }
 
-  def distanceTo(that: Vector2D): Float = {
+  def distanceTo(that: Vector2D): Float = math.sqrt(distanceToSqr(that)).toFloat
+
+  def distanceToSqr(that: Vector2D): Float = {
     val dx = x - that.x
     val dy = y - that.y
-    math.sqrt(dx*dx + dy*dy).toFloat
+    dx*dx + dy*dy
   }
 
   def heading: Float = {
@@ -65,7 +81,7 @@ object Boid {
   val width   = (extent + excess) * 2
   val height  = width
 
-  val drawRadius  = 2.0f
+  val paintSize  = 2.0f
 
   val scaleFactor = 0.5f
 
@@ -75,26 +91,28 @@ object Boid {
 
   // separation
   val boidSeparation = 25.0f * scaleFactor
-  val wallSeparation = excess * 1.5f
+  val boidSeparationSqr = boidSeparation * boidSeparation
+  val wallSeparation = excess * 1.0f // 1.5f
 
   // coherence and alignment
   val neighborDist = 50f * scaleFactor
+  val neighborDistSqr = neighborDist * neighborDist
 
   val separationWeight  = 1.5f
   val alignmentWeight   = 1.0f
   val coherenceWeight   = 1.0f
 }
-final class Boid(val location: Vector2D, val velocity: Vector2D) {
+final case class Boid(location: Vector2D, velocity: Vector2D) {
   import Boid._
 
-  def run(boids: Seq[Boid])(implicit tx: InTxn): Boid = {
+  def run(boids: Seq[Boid])(implicit tx: InTxn, random: TxnRandom[InTxn]): Boid = {
     val accel = flock(boids)
     update(accel)
     // render()
   }
 
   // We accumulate a new acceleration each time based on three rules
-  private def flock(boids: Seq[Boid]): Vector2D = {
+  private def flock(boids: Seq[Boid])(implicit tx: InTxn, random: TxnRandom[InTxn]): Vector2D = {
     val sep = separate(boids)   // Separation
     val ali = align   (boids)   // Alignment
     val coh = cohesion(boids)   // Cohesion
@@ -102,10 +120,29 @@ final class Boid(val location: Vector2D, val velocity: Vector2D) {
     sep * separationWeight + ali * alignmentWeight + coh * coherenceWeight
   }
 
-  private def update(accel: Vector2D): Boid = {
-    val velNew = (velocity + accel).limit(maxSpeed)
-    val locNew = (location + velNew).clip(excessH, excessH, side + excessH, side + excessH)
-    new Boid(location = locNew, velocity = velNew)
+  private def update(accel: Vector2D)(implicit tx: InTxn, random: TxnRandom[InTxn]): Boid = {
+    var vel   = (velocity + accel).limit(maxSpeed)
+    var loc   = location + vel
+    if (loc.x < excessH) {
+      loc = Vector2D(excess - loc.x, loc.y)
+      vel = Vector2D(-vel.x, vel.y)
+    }
+    if (loc.x > width - excessH) {
+      loc = Vector2D(2*width - excess - loc.x, loc.y)
+      vel = Vector2D(-vel.x, vel.y)
+    }
+    if (loc.y < excessH) {
+      loc = Vector2D(loc.x, excess - loc.y)
+      vel = Vector2D(vel.x, -vel.y)
+    }
+    if (loc.y > height - excessH) {
+      loc = Vector2D(loc.x, 2*height - excess - loc.y)
+      vel = Vector2D(vel.x, -vel.y)
+    }
+
+    vel = Vector2D(vel.x + (random.nextFloat() - 0.5f) * maxSpeed * 0.01f,
+                   vel.y + (random.nextFloat() - 0.5f) * maxSpeed * 0.01f)
+    new Boid(location = loc, velocity = vel)
   }
 
   // A method that calculates and applies a steering force towards a target
@@ -128,59 +165,87 @@ final class Boid(val location: Vector2D, val velocity: Vector2D) {
     g.translate(location.x, location.y)
     g.rotate(theta)
     val shape = new GeneralPath(Path2D.WIND_NON_ZERO, 4)
-    shape.moveTo(0, -drawRadius*2)
-    shape.lineTo(-drawRadius, drawRadius*2)
-    shape.lineTo(drawRadius, drawRadius*2)
+    shape.moveTo(0, 0)
+    shape.lineTo(-paintSize, paintSize*4)
+    shape.lineTo( paintSize, paintSize*4)
     shape.closePath()
-    g.setColor(Color.blue)
+    g.setColor(Color.magenta)
     // g.draw(shape)
     g.fill(shape)
     g.setTransform(atOrig)
   }
 
-  private def separationStep(steer: Vector2D, other: Vector2D, desiredSeparation: Float): Vector2D = {
-    val d = location distanceTo other
+  private def separationStep(steer: Vector2D, other: Vector2D, sepSqr: Float): Vector2D = {
+    val d = location distanceToSqr other
     // If the distance is greater than 0 and less than an arbitrary amount (0 when you are yourself)
-    if ((d > 0) && (d < desiredSeparation)) {
+    if ((d > 0) && (d < sepSqr)) {
       // Calculate vector pointing away from neighbor
       val diff0 = location - other
       val diff  = diff0.normalize / d // Weight by distance
-      diff
-    } else Vector2D.empty
+      steer + diff
+    } else steer
   }
 
   // Separation
   // Method checks for nearby boids and steers away
   private def separate(boids: Seq[Boid]): Vector2D = {
     // For every boid in the system, check if it's too close
-    val steer0 = (Vector2D.empty /: boids) { case (steerIn, other) =>
-      separationStep(steerIn, other.location, boidSeparation)
+    val steerB = (Vector2D.empty /: boids) { case (steerIn, other) =>
+      separationStep(steerIn, other.location, boidSeparationSqr)
     }
-    val walls =
-      Vector2D(0, location.y) :: Vector2D(width, location.y) ::
-      Vector2D(location.x, 0) :: Vector2D(location.x, height) :: Nil
 
-    val steer = (steer0 /: walls) { case (steerIn, wall) =>
-      separationStep(steerIn, wall, wallSeparation)
-    }
+    //    val xt = location.x // + random.nextFloat() - 0.5f
+    //    val yt = location.x // + random.nextFloat() - 0.5f
+    //
+    //    val walls =
+    //      Vector2D(0f, yt) :: Vector2D(width, yt) ::
+    //      Vector2D(xt, 0f) :: Vector2D(xt, height) :: Nil
+    //
+    //    val steerW = (Vector2D.empty /: walls) { case (steerIn, wall) =>
+    //      separationStep(steerIn, wall, wallSeparation)
+    //    }
 
     // As long as the vector is greater than 0
-    if (steer.nonEmpty) {
+    val steerBN = if (steerB.nonEmpty) {
       // Implement Reynolds: Steering = Desired - Velocity
-      (steer.normalize * maxSpeed - velocity).limit(maxForce)
+      (steerB.normalize * maxSpeed - velocity).limit(maxForce)
     }
     else Vector2D.empty
+
+    //    val steerWN = if (steerW.nonEmpty) {
+    //      (steerW.normalize * maxSpeed - velocity).limit(maxForce)
+    //    }
+    //    else Vector2D.empty
+    //
+    //    steerBN + steerWN
+
+    steerBN
   }
 
   // Alignment
   // For every nearby boid in the system, calculate the average velocity
   private def align(boids: Seq[Boid]): Vector2D = {
     val sum = (Vector2D.empty /: boids) { case (sumIn, other) =>
-      val d = location distanceTo other.location
-      if ((d > 0) && (d < neighborDist)) {
+      val d = location distanceToSqr other.location
+      if ((d > 0) && (d < neighborDistSqr)) {
         sumIn + other.velocity
       } else sumIn
     }
+
+    //    val xt = location.x // + random.nextFloat() - 0.5f
+    //    val yt = location.x // + random.nextFloat() - 0.5f
+    //
+    //    val walls =
+    //      (Vector2D(0f, yt), Vector2D(maxSpeed, 0f)) :: (Vector2D(width, yt), Vector2D(-maxSpeed, 0f)) ::
+    //      (Vector2D(xt, 0f), Vector2D(0f, maxSpeed)) :: (Vector2D(xt, height), Vector2D(0f, -maxSpeed)) :: Nil
+    //
+    //    val sum = (sum0 /: walls) { case (sumIn, (wallLoc, wallVel)) =>
+    //      val d = location distanceToSqr wallLoc
+    //      if ((d > 0) && (d < neighborDistSqr)) {
+    //        sumIn + wallVel
+    //      } else sumIn
+    //    }
+
     if (sum.nonEmpty) {
       // Implement Reynolds: Steering = Desired - Velocity
       val norm  = sum.normalize * maxSpeed
@@ -194,8 +259,8 @@ final class Boid(val location: Vector2D, val velocity: Vector2D) {
   // For the average location (i.e. center) of all nearby boids, calculate steering vector towards that location
   private def cohesion(boids: Seq[Boid]): Vector2D = {
     val (sum, count) = ((Vector2D.empty, 0) /: boids) { case (in @ (sumIn, countIn), other) =>
-      val d = location distanceTo other.location
-      if ((d > 0) && (d < neighborDist)) {
+      val d = location distanceToSqr other.location
+      if ((d > 0) && (d < neighborDistSqr)) {
         (sumIn + other.location, countIn + 1)
       } else in
     }

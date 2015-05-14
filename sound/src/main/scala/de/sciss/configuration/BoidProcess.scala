@@ -13,6 +13,7 @@
 
 package de.sciss.configuration
 
+import de.sciss.lucre.confluent.TxnRandom
 import de.sciss.lucre.event.Observable
 import de.sciss.lucre.event.impl.ObservableImpl
 import de.sciss.lucre.stm
@@ -44,6 +45,7 @@ object BoidProcess {
     private val tokenRef      = Ref(-1)
     private val periodRef     = Ref(DEFAULT_PERIOD)
     // private val startFrameRef = Ref(0L)
+    private implicit val random = TxnRandom.plain(0L)
 
     def cursor: stm.Cursor[S] = sched.cursor
 

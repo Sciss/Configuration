@@ -32,6 +32,7 @@ object Configuration {
     import quad.cursor
     cursor.step { implicit tx =>
       val boids = BoidProcess[D]
+      boids.period = 0.01 // 5
       ControlView(boids, quad)
     }
   }

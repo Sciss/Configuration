@@ -23,13 +23,15 @@ import de.sciss.lucre.swing.impl.ComponentHolder
 import de.sciss.lucre.swing.{View, deferTx}
 import de.sciss.lucre.synth.Sys
 import de.sciss.numbers
+import de.sciss.swingplus.OverlayPanel
 import de.sciss.synth.impl.DefaultUGenGraphBuilderFactory
 import de.sciss.synth.swing.ServerStatusPanel
 import de.sciss.synth.{Server, ServerConnection, Synth, SynthDef}
 
-import scala.swing.event.MousePressed
-import scala.swing.{Label, BorderPanel, Button, Component, FlowPanel, Frame}
+import scala.swing.event.{ButtonClicked, MousePressed}
+import scala.swing.{Graphics2D, ToggleButton, Swing, Label, BorderPanel, Button, Component, FlowPanel, Frame}
 import scala.util.Try
+import Swing._
 
 object ControlView {
   import QuadGraphDB.{PlacedNode, Tpe, extent}
@@ -63,6 +65,7 @@ object ControlView {
 
     private[this] var boidsState: BoidProcess.State = _
     private[this] var quadView  : SkipQuadtreeView[S, PlacedNode] = _
+    private[this] var boidsComp : Component = _
 
     def init()(implicit tx: S#Tx): this.type = {
       val quadH = quad.handles.head // XXX TODO
@@ -70,7 +73,7 @@ object ControlView {
       deferTx(guiInit(quadH))
       boids.react { implicit tx => state =>
         boidsState = state
-        deferTx(quadView.repaint())
+        deferTx(boidsComp.repaint())
       }
       this
     }
@@ -87,6 +90,7 @@ object ControlView {
       import de.sciss.synth.Ops._
 
       quadView  = new SkipQuadtreeView[S, PlacedNode](quadH, cursor, _.coord)
+      quadView.setBorder(Swing.EmptyBorder(Boid.excess, Boid.excess, Boid.excess, Boid.excess))
 
       def stopSynth(): Unit = synthOpt.foreach { synth =>
         synthOpt = None
@@ -127,14 +131,47 @@ object ControlView {
       pStatus.bootAction = Some(boot)
       val boidsTransport = Transport.makeButtonStrip(Seq(Transport.Stop(stopBoids()), Transport.Play(startBoids())))
       val soundTransport = Transport.makeButtonStrip(Seq(Transport.Stop(stopSynth()), Transport.Play(playSynth())))
-      val tp = new FlowPanel(new Label("Boids:"), boidsTransport, pStatus, butKill, new Label("Sound:"), soundTransport)
 
       // quadView.scale = 240.0 / extent
       val quadComp  = Component.wrap(quadView)
+      quadComp.visible = false
+
+      val ggQuadVis = new ToggleButton("Quad Vis") {
+        listenTo(this)
+        reactions += {
+          case ButtonClicked(_) =>
+            quadComp.visible = selected
+        }
+      }
+
+      val ggPrintBoids = Button("Print") {
+        boidsState.zipWithIndex.foreach { case (boid, id) =>
+          println(s"$id: $boid")
+        }
+      }
+
+      val tp = new FlowPanel(ggQuadVis, new Label("Boids:"), ggPrintBoids, boidsTransport, pStatus, butKill,
+        new Label("Sound:"), soundTransport)
+
+      boidsComp = new Component {
+        preferredSize = (Boid.width, Boid.height)
+
+        override protected def paintComponent(g: Graphics2D): Unit = {
+          g.setColor(Color.lightGray)
+          g.drawRect(Boid.excess, Boid.excess, Boid.side, Boid.side)
+          boidsState.foreach(_.paint(g))
+        }
+      }
+
+      val overlay = new OverlayPanel {
+        preferredSize = (Boid.width, Boid.height)
+        contents += boidsComp
+        contents += quadComp
+      }
 
       val mainPane = new BorderPanel {
         add(tp      , BorderPanel.Position.North )
-        add(quadComp, BorderPanel.Position.Center)
+        add(overlay , BorderPanel.Position.Center)
       }
 
       quadComp.listenTo(quadComp.mouse.clicks)
@@ -159,16 +196,16 @@ object ControlView {
           }
       }
 
-      def topPaint(h: QuadView.PaintHelper): Unit = {
-        import h.g2
-        //        g2.setColor(Color.green)
-        //        g2.drawLine(0, 0, 100,   0)
-        //        g2.drawLine(0, 0,   0, 100)
-        h.translate(-Boid.excess, -Boid.excess)
-        boidsState.foreach(_.paint(g2))
-      }
+      //      def topPaint(h: QuadView.PaintHelper): Unit = {
+      //        import h.g2
+      //        //        g2.setColor(Color.green)
+      //        //        g2.drawLine(0, 0, 100,   0)
+      //        //        g2.drawLine(0, 0,   0, 100)
+      //        // h.translate(-Boid.excess, -Boid.excess)
+      //        boidsState.foreach(_.paint(g2))
+      //      }
 
-      quadView.topPainter = Some(topPaint _)
+      // quadView.topPainter = Some(topPaint _)
 
       component = mainPane
     }
