@@ -20,6 +20,7 @@ import de.sciss.audiowidgets.Transport
 import de.sciss.lucre.data.gui.SkipQuadtreeView
 import de.sciss.lucre.geom.{IntDistanceMeasure2D, IntPoint2D}
 import de.sciss.lucre.stm
+import de.sciss.lucre.stm.TxnLike
 import de.sciss.lucre.swing.impl.ComponentHolder
 import de.sciss.lucre.swing.{View, deferTx}
 import de.sciss.lucre.synth.{Bus, Synth, Sys, Txn}
@@ -48,6 +49,7 @@ object ControlView {
         open()
 
         override def closeOperation(): Unit = {
+          Configuration.orderlyQuit = true
           quad.cursor.step { implicit tx =>
             res   .dispose()
             boids .dispose()
@@ -60,7 +62,7 @@ object ControlView {
     res
   }
 
-  private final class Impl[S <: Sys[S]](boids: BoidProcess[S], quad: QuadGraphDB[S], meterView: AudioBusMeter[S])
+  private final class Impl[S <: Sys[S]](val boids: BoidProcess[S], val quad: QuadGraphDB[S], meterView: AudioBusMeter[S])
     extends ControlView[S] with ComponentHolder[Component] {
 
     def cursor: stm.Cursor[S] = quad.cursor
@@ -236,7 +238,7 @@ object ControlView {
       }
 
       val tp1 = new FlowPanel(ggQuadVis, new Label("Boids:"), ggAuralBoids, ggBoidRate, ggPrintBoids, boidsTransport)
-      val tp2 = new FlowPanel(new Label("Server:"), ggHP, Component.wrap(pStatus), butKill, new Label("Sound:"),
+      val tp2 = new FlowPanel(new Label("Server:"), ggHP, Component.wrap(pStatus), butKill, new Label("Test:"),
         soundTransport)
       val tp = new BoxPanel(Orientation.Vertical) {
         contents += tp1
@@ -320,9 +322,17 @@ object ControlView {
         }
       }
     }
+
+    def auralBoidsOption(implicit tx: TxnLike): Option[AuralBoids[S]] = auralBoidsRef.get(tx.peer)
   }
 }
 trait ControlView[S <: Sys[S]] extends View.Cursor[S] {
   def infra(implicit tx: S#Tx): Infra
   def infra_=(value: Infra)(implicit tx: S#Tx): Unit
+
+  def boids: BoidProcess[S]
+
+  def quad: QuadGraphDB[S]
+
+  def auralBoidsOption(implicit tx: TxnLike): Option[AuralBoids[S]]
 }

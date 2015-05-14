@@ -13,8 +13,9 @@
 
 package de.sciss.configuration
 
+import de.sciss.configuration.QuadGraphDB.PlacedNode
 import de.sciss.lucre.geom.{IntDistanceMeasure2D, IntPoint2D}
-import de.sciss.lucre.stm.Disposable
+import de.sciss.lucre.stm.{TxnLike, Disposable}
 import de.sciss.lucre.synth.{Synth, Sys}
 import de.sciss.numbers
 import de.sciss.synth.addToHead
@@ -41,7 +42,10 @@ object AuralBoids {
       }
     }
 
+    private val playingNodes = TSet.empty[PlacedNode]
+
     private def stepChan(ch: Infra.Channel)(implicit tx: S#Tx): Unit = {
+      implicit val itx = tx.peer
       val layer         = 0 // XXX TODO
       val q             = quad.handles(layer).apply()
       val loc           = boids.state.apply(ch.index).location
@@ -50,6 +54,10 @@ object AuralBoids {
         val graph = node.node.input.graph
         val syn = Synth.play(graph)(target = ch.group, addAction = addToHead)
         syn.write(ch.bus -> "out")
+        playingNodes += node
+        syn.onEndTxn { implicit tx =>
+          playingNodes -= node
+        }
       }
       import numbers.Implicits._
       val delaySeconds  = math.random.linexp(0, 1, 4.0, 30.0)
@@ -63,7 +71,6 @@ object AuralBoids {
         releaseChan(ch)
         stepChan(ch)
       }
-      implicit val itx = tx.peer
       tokenRef() = token
       scheduled += token
     }
@@ -80,9 +87,23 @@ object AuralBoids {
     }
 
     def dispose()(implicit tx: S#Tx): Unit = stop()
+
+    def debugPrint()(implicit tx: TxnLike): Unit = {
+      implicit val itx = tx.peer
+      println("------- LAST ACTIVE NODES -------")
+      playingNodes.foreach { n =>
+        println(n)
+        val ugens = n.node.input.graph.sources.collect {
+          case p: Product => p.productPrefix
+        } .toSet.toIndexedSeq.sorted
+        println(ugens.mkString("[", ", ", "]"))
+      }
+    }
   }
 }
 trait AuralBoids[S <: Sys[S]] extends Disposable[S#Tx] {
   def start()(implicit tx: S#Tx): Unit
   def stop ()(implicit tx: S#Tx): Unit
+
+  def debugPrint()(implicit tx: TxnLike): Unit
 }

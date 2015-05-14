@@ -24,6 +24,8 @@ import scala.concurrent.ExecutionContext
 object Configuration {
   final val numTransducers = 9
 
+  var orderlyQuit = false
+
   def main(args: Array[String]): Unit = {
     if (args.headOption == Some("--make")) {
       val proc = QuadGraphDB.make()
@@ -72,8 +74,8 @@ object Configuration {
         val sig0    = Normalizer.ar(in, level = ceil1, dur = normDur)
         // sig0.poll(sig0.abs > 1, label = "NORM")
         // val sig     = Limiter.ar(sig0, level = -0.2.dbamp)
-        val sig = LeakDC.ar(sig0.clip(-ceil1, ceil1)).clip(-ceil2, ceil2)
-        sig .poll(sig .abs > 1, label = "LIM ")
+        val sig = LeakDC.ar(sig0.clip(-ceil1, ceil1)).clip(-ceil2, ceil2)  // nu is gut!
+        // sig .poll(sig .abs > 1, label = "LIM ")
         // val sig = sig0
         Out.ar("out".kr, sig)
       }
@@ -103,6 +105,9 @@ object Configuration {
 
       def auralStopped()(implicit tx: Txn): Unit = {
         println("AuralSystem stopped.")
+        if (!orderlyQuit) {
+          view.auralBoidsOption.foreach(_.debugPrint())
+        }
       }
     })
     aural.start(sCfg)
