@@ -13,10 +13,10 @@
 
 package de.sciss.configuration
 
-import java.awt.Color
+import java.awt.{Color, Font}
 import java.text.SimpleDateFormat
 import java.util.{Date, Locale}
-import javax.swing.{JFrame, SwingUtilities, SpinnerNumberModel}
+import javax.swing.{JFrame, SpinnerNumberModel, SwingUtilities}
 
 import de.sciss.audiowidgets.Transport
 import de.sciss.file._
@@ -26,17 +26,19 @@ import de.sciss.lucre.stm
 import de.sciss.lucre.stm.TxnLike
 import de.sciss.lucre.swing.impl.ComponentHolder
 import de.sciss.lucre.swing.{View, deferTx}
-import de.sciss.lucre.synth.{Server, Buffer, Bus, Synth, Sys, Txn}
-import de.sciss.swingplus.{OverlayPanel, Spinner}
+import de.sciss.lucre.synth.{Buffer, Bus, Synth, Sys, Txn}
+import de.sciss.swingplus
+import de.sciss.swingplus.{CloseOperation, OverlayPanel, Spinner}
 import de.sciss.synth.io.{AudioFileType, SampleFormat}
 import de.sciss.synth.swing.j.JServerStatusPanel
-import de.sciss.synth.{addAfter, Server => SServer, SynthGraph, addToHead, addToTail}
+import de.sciss.synth.{Server => SServer, SynthGraph, addAfter, addToHead, addToTail}
 import de.sciss.{numbers, synth}
 
+import scala.collection.breakOut
 import scala.concurrent.stm.Ref
 import scala.swing.Swing._
 import scala.swing.event.{ButtonClicked, MousePressed, ValueChanged}
-import scala.swing.{BorderPanel, BoxPanel, Button, Component, FlowPanel, Frame, Graphics2D, Label, Orientation, Swing, ToggleButton}
+import scala.swing.{BorderPanel, BoxPanel, Button, Component, FlowPanel, Frame, Graphics2D, Label, Orientation, Slider, Swing, ToggleButton}
 import scala.util.Try
 
 object ControlView {
@@ -45,14 +47,21 @@ object ControlView {
   def apply[S <: Sys[S]](boids: BoidProcess[S], quad: QuadGraphDB[S])(implicit tx: S#Tx): ControlView[S] = {
     val meterView = AudioBusMeter[S]
     val res = new Impl(boids, quad, meterView).init()
+    val isMin = Configuration.minimal
     deferTx {
-      new Frame {
+      val f = new Frame {
         title     = "Configuration"
         contents  = res.component
         pack().centerOnScreen()
         open()
 
-        override def closeOperation(): Unit = res.quit(shutdown = false)
+        override def closeOperation(): Unit =
+          if (!isMin) res.quit(shutdown = false)
+      }
+
+      if (isMin) {
+        import swingplus.Implicits._
+        f.defaultCloseOperation = CloseOperation.Ignore
       }
     }
     res
@@ -71,10 +80,12 @@ object ControlView {
     private[this] val hpSynth   = Ref(Option.empty[Synth])
 
     def init()(implicit tx: S#Tx): this.type = {
-      val quadH = quad.handles.head // XXX TODO
-      boidsState = boids.state
-      val boidRate0 = boids.period
-      deferTx(guiInit(quadH, boidRate0 = boidRate0))
+      val quadH         = quad.handles.head // XXX TODO
+      boidsState        = boids.state
+      val boidRate0     = boids.period
+      val masterVolume0 = Configuration.masterVolume
+      // println(s"masterVolume0 = $masterVolume0")
+      deferTx(guiInit(quadH, boidRate0 = boidRate0, masterVolume0 = masterVolume0))
       boids.react { implicit tx => state =>
         boidsState = state
         deferTx(boidsComp.repaint())
@@ -126,7 +137,8 @@ object ControlView {
       val synOpt = cursor.step { implicit tx =>
         infraOption.map { inf =>
           val graph = SynthGraph {
-            import synth._; import ugen._
+            import synth._
+            import ugen._
             FreeSelf.kr("gate".kr(1f) <= 0) // because stopSynth uses `release`
             DiskOut.ar("buf".kr, In.ar("bus".kr, 2))
           }
@@ -148,6 +160,8 @@ object ControlView {
     }
 
     private val hpState = Ref(initialValue = false)
+
+    private var mLayer: SpinnerNumberModel = _
 
     private def setHPState(state: Boolean)(implicit tx: S#Tx): Unit = {
       implicit val itx = tx.peer
@@ -176,7 +190,8 @@ object ControlView {
       }
     }
 
-    private def guiInit(quadH: stm.Source[S#Tx, Tpe[S]], boidRate0: Double): Unit = {
+    private def guiInit(quadH: stm.Source[S#Tx, Tpe[S]], boidRate0: Double, masterVolume0: Int): Unit = {
+      val notMin = !Configuration.minimal
 
       quadView  = new SkipQuadtreeView[S, PlacedNode](quadH, cursor, _.coord)
       quadView.setBorder(Swing.EmptyBorder(Boid.excess, Boid.excess, Boid.excess, Boid.excess))
@@ -199,6 +214,18 @@ object ControlView {
 
       val soundTransport = Transport.makeButtonStrip(Seq(
         Transport.Stop(stopSynth()), Transport.Play(playSynth()), Transport.Record(recordSound())))
+
+      mLayer = new SpinnerNumberModel(0, 0, QuadGraphDB.numLayers, 1)
+      val ggLayer = new Spinner(mLayer) {
+        listenTo(this)
+        reactions += {
+          case ValueChanged(_) =>
+            val lyr = mLayer.getNumber.intValue()
+            quad.cursor.step { implicit tx =>
+              auralBoidsOption.foreach(_.layer = lyr)
+            }
+        }
+      }
 
       // quadView.scale = 240.0 / extent
       val quadComp  = Component.wrap(quadView)
@@ -261,9 +288,18 @@ object ControlView {
         }
       }
 
-      val tp1 = new FlowPanel(ggQuadVis, new Label("Boids:"), ggAuralBoids, ggBoidRate, ggPrintBoids, boidsTransport)
-      val tp2 = new FlowPanel(new Label("Server:"), ggHP, Component.wrap(pStatus), butKill, new Label("Test:"),
-        soundTransport)
+      val tp1 = new FlowPanel {
+        if (notMin) contents += ggQuadVis
+        contents ++= Seq(new Label("Boids:"), ggAuralBoids)
+        if (notMin) contents ++= Seq(ggBoidRate, ggPrintBoids)
+        contents += boidsTransport
+      }
+      val tp2 = new FlowPanel(new Label("Server:")) {
+        if (notMin) contents += ggHP
+        contents += Component.wrap(pStatus)
+        if (notMin) contents ++= Seq(butKill, new Label("Test:"), soundTransport)
+        contents += ggLayer
+      }
       val tp = new BoxPanel(Orientation.Vertical) {
         contents += tp1
         contents += tp2
@@ -285,22 +321,32 @@ object ControlView {
         contents += quadComp
       }
 
-      val pMeter = new BoxPanel(Orientation.Vertical) {
-        contents += Swing.VGlue
-        contents += meterView.component
-        contents += Swing.VGlue
-      }
+      //      val pMeter = new BoxPanel(Orientation.Vertical) {
+      //        contents += Swing.VGlue
+      //        contents += meterView.component
+      //        contents += Swing.VGlue
+      //      }
+
+      val pMeter = new FlowPanel(mkAmpFader(masterVolume0)(cursor), meterView.component)
 
       val mainPane = new BorderPanel {
         add(tp      , BorderPanel.Position.North )
         add(overlay , BorderPanel.Position.Center)
         add(pMeter  , BorderPanel.Position.East  )
+
+        if (!notMin) {
+          val ggShutdown = Button("SHUTDOWN") {
+            quit(shutdown = true)
+          }
+          ggShutdown.font = new Font(Font.SANS_SERIF, Font.BOLD, 24)
+          add(ggShutdown, BorderPanel.Position.South)
+        }
       }
 
       val mouseComp = boidsComp // quadComp
       mouseComp.listenTo(mouseComp.mouse.clicks)
       // val insets = quadView.getInsets
-      mouseComp.reactions += {
+      if (notMin) mouseComp.reactions += {
         case MousePressed(_, pt, mod, clicks, _) =>
           import numbers.Implicits._
           val x = (pt.x / quadView.scale + 0.5).toInt.clip(0, Boid.width )
@@ -327,7 +373,7 @@ object ControlView {
     private val auralBoidsRef = Ref(Option.empty[AuralBoids[S]])
     private val auralBoidsOn  = Ref(initialValue = false)
 
-    private def infraOption(implicit tx: Txn): Option[Infra] = infraRef.get(tx.peer)
+    def infraOption(implicit tx: Txn): Option[Infra] = infraRef.get(tx.peer)
 
     def infra(implicit tx: S#Tx): Infra = infraRef.get(tx.peer).getOrElse(sys.error("infra was not set yet"))
 
@@ -348,8 +394,10 @@ object ControlView {
         if (hpState()) setHPState(true)
       }
 
+      val lyrOpt = auralBoidsOpt.map(_.layer)
       deferTx {
         pStatus.server = valueOpt.map(_.server.peer)
+        lyrOpt.foreach(mLayer.setValue)
         SwingUtilities.getWindowAncestor(component.peer) match {
           case jf: JFrame => jf.pack()
         }
@@ -359,24 +407,29 @@ object ControlView {
     def auralBoidsOption(implicit tx: TxnLike): Option[AuralBoids[S]] = auralBoidsRef.get(tx.peer)
 
     def disposeAural()(implicit tx: S#Tx): Unit = {
+      val infOpt = infraOption
       setInfra(None)
       hpSynth.swap(None)(tx.peer)
       deferTx {
         synthsPlaying = Nil
       }
       tx.afterCommit {
-        Try(SServer.default).toOption.foreach(_.dispose())
+        infOpt.foreach(_.server.peer.dispose())
       }
     }
 
     def quit(shutdown: Boolean): Unit = {
       Configuration.orderlyQuit = true
-      quad.cursor.step { implicit tx =>
+      val sOpt = quad.cursor.step { implicit tx =>
         disposeAural()
         this  .dispose()
         boids .dispose()
         quad  .dispose()
+        infraOption.map(_.server)
       }
+      // Configuration.killSuperCollider()
+      sOpt.foreach(_.peer.dispose())
+
       if (shutdown) {
         import sys.process._
         "/sbin/shutdown now".!
@@ -386,10 +439,72 @@ object ControlView {
       }
     }
   }
+
+  private def mkAmpFader[S <: Sys[S]](in0: Double)(implicit csr: stm.Cursor[S])/* (fun: Int => Unit) */: Slider = {
+    val zeroMark    = "0\u25C0"
+    val lbMap: Map[Int, Label] = (-72 to 18 by 12).map { dec =>
+      val txt = if (dec == -72) "-\u221E" else if (dec == 0) zeroMark else dec.toString
+      val lb  = new Label(txt)
+      lb.font = new Font(Font.SANS_SERIF, Font.PLAIN, 9)
+      (dec, lb)
+    } (breakOut)
+    val lbZero = lbMap(0)
+
+    val sl    = new Slider {
+      orientation       = Orientation.Vertical
+      min               = -72
+      max               =   0
+      value             = in0.toInt
+      minorTickSpacing  =   3
+      majorTickSpacing  =  12
+      paintTicks        = true
+      paintLabels       = true
+
+      private var isZero = true  // will be initialized
+
+      peer.putClientProperty("JComponent.sizeVariant", "small")
+      peer.putClientProperty("JSlider.isFilled", true)   // used by Metal-lnf
+      labels            = lbMap
+
+      private def perform(store: Boolean): Unit = {
+        val v = value
+        // fun(v)
+        if (isZero) {
+          if (v != 0) {
+            isZero = false
+            lbZero.text = "0"
+            repaint()
+          }
+        } else {
+          if (v == 0) {
+            isZero = true
+            lbZero.text = zeroMark
+            repaint()
+          }
+        }
+        if (store) {
+          // prefs.put(v)
+          csr.step { implicit tx =>
+            Configuration.masterVolume = v
+          }
+        }
+      }
+
+      listenTo(this)
+      reactions += {
+        case ValueChanged(_) => perform(store = true)
+      }
+      perform(store = false)
+    }
+
+    sl
+  }
 }
 trait ControlView[S <: Sys[S]] extends View.Cursor[S] {
   def infra(implicit tx: S#Tx): Infra
   def infra_=(value: Infra)(implicit tx: S#Tx): Unit
+
+  def infraOption(implicit tx: Txn): Option[Infra]
 
   def boids: BoidProcess[S]
 

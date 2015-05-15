@@ -28,13 +28,14 @@ import scala.concurrent.stm.{Ref, TSet}
 object AuralBoids {
   def apply[S <: Sys[S]](infra: Infra, boids: BoidProcess[S], quad: QuadGraphDB[S])
                         (implicit tx: S#Tx): AuralBoids[S] = {
-    new Impl(infra, boids, quad)
+    new Impl(infra, boids, quad, layer0 = util.Random.nextInt(QuadGraphDB.numLayers))
   }
 
-  private final class Impl[S <: Sys[S]](infra: Infra, boids: BoidProcess[S], quad: QuadGraphDB[S])
+  private final class Impl[S <: Sys[S]](infra: Infra, boids: BoidProcess[S], quad: QuadGraphDB[S], layer0: Int)
     extends AuralBoids[S] {
 
     private val scheduled = TSet.empty[Int]
+    private val layerRef  = Ref(layer0)
 
     def start()(implicit tx: S#Tx): Unit = {
       stop()
@@ -46,10 +47,14 @@ object AuralBoids {
 
     private val playingNodes = TSet.empty[(Long, PlacedNode)] // _1 = time stamp
 
+    def layer(implicit tx: S#Tx): Int = layerRef.get(tx.peer)
+
+    def layer_=(value: Int)(implicit tx: S#Tx): Unit = layerRef.set(value)(tx.peer)
+
     private def stepChan(ch: Infra.Channel)(implicit tx: S#Tx): Unit = {
       implicit val itx = tx.peer
-      val layer         = 5 // 0 // XXX TODO
-      val q             = quad.handles(layer).apply()
+      val lyr           = layerRef()
+      val q             = quad.handles(lyr).apply()
       val loc           = boids.state.apply(ch.index).location
       val pt            = IntPoint2D((loc.x + 0.5f).toInt, (loc.y + 0.5f).toInt)
       q.nearestNeighborOption(pt, IntDistanceMeasure2D.euclideanSq).foreach { pn =>
@@ -115,4 +120,7 @@ trait AuralBoids[S <: Sys[S]] extends Disposable[S#Tx] {
   def stop ()(implicit tx: S#Tx): Unit
 
   def debugPrint()(implicit tx: TxnLike): Unit
+
+  def layer(implicit tx: S#Tx): Int
+  def layer_=(value: Int)(implicit tx: S#Tx): Unit
 }
