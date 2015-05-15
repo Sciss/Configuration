@@ -52,15 +52,7 @@ object ControlView {
         pack().centerOnScreen()
         open()
 
-        override def closeOperation(): Unit = {
-          Configuration.orderlyQuit = true
-          quad.cursor.step { implicit tx =>
-            res   .dispose()
-            boids .dispose()
-            quad  .dispose()
-          }
-          sys.exit()
-        }
+        override def closeOperation(): Unit = res.quit(shutdown = false)
       }
     }
     res
@@ -376,6 +368,23 @@ object ControlView {
         Try(SServer.default).toOption.foreach(_.dispose())
       }
     }
+
+    def quit(shutdown: Boolean): Unit = {
+      Configuration.orderlyQuit = true
+      quad.cursor.step { implicit tx =>
+        disposeAural()
+        this  .dispose()
+        boids .dispose()
+        quad  .dispose()
+      }
+      if (shutdown) {
+        import sys.process._
+        "/sbin/shutdown now".!
+
+      } else {
+        sys.exit()
+      }
+    }
   }
 }
 trait ControlView[S <: Sys[S]] extends View.Cursor[S] {
@@ -389,4 +398,6 @@ trait ControlView[S <: Sys[S]] extends View.Cursor[S] {
   def auralBoidsOption(implicit tx: TxnLike): Option[AuralBoids[S]]
 
   def disposeAural()(implicit tx: S#Tx): Unit
+
+  def quit(shutdown: Boolean): Unit
 }

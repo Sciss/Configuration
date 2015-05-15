@@ -43,6 +43,9 @@ lazy val sound = Project(
       "de.sciss"  %% "lucredata-views"          % "2.3.1",
       "de.sciss"  %% "scalacolliderswing-core"  % "1.25.0",
       "de.sciss"  %% "lucrestm-bdb"             % "2.1.1"
-    )
+    ),
+    mainClass in assembly := Some("de.sciss.configuration.Configuration"),
+    assemblyJarName in assembly := s"$baseName.jar",
+    target in assembly := baseDirectory.value
   )
 )
