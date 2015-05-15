@@ -2,7 +2,7 @@ lazy val baseName = "Configuration"
 
 def baseNameL = baseName.toLowerCase
 
-lazy val projectVersion   = "0.1.0-SNAPSHOT"
+lazy val projectVersion   = "0.1.0"
 
 lazy val commonSettings = Project.defaultSettings ++ Seq(
   version            := projectVersion,
