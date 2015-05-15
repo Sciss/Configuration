@@ -48,7 +48,7 @@ object AuralBoids {
 
     private def stepChan(ch: Infra.Channel)(implicit tx: S#Tx): Unit = {
       implicit val itx = tx.peer
-      val layer         = 0 // XXX TODO
+      val layer         = 5 // 0 // XXX TODO
       val q             = quad.handles(layer).apply()
       val loc           = boids.state.apply(ch.index).location
       val pt            = IntPoint2D((loc.x + 0.5f).toInt, (loc.y + 0.5f).toInt)

@@ -36,13 +36,16 @@ object QuadGraphDB {
 
   final val extent  = 256
 
-  private final val singleNames = Vec(
-    "betanovuss0", "betanovuss1", "betanovuss2",
-    "betanovussSchrauben", "betanovussStairs",
-    "zaubes2"
+  final val layerNames = Vec(
+    "betanovuss0",          // 0
+    "betanovuss1",          // 1
+    "betanovuss2",          // 2
+    "betanovussSchrauben",  // 3
+    "betanovussStairs",     // 4
+    "zaubes2"               // 5
   )
 
-  private final val singleNumNames  = singleNames.size
+  final val numLayers = layerNames.size
 
   private def pointView[S <: Sys[S]]: (PlacedNode, S#Tx) => IntPoint2D = (n, tx) => n.coord
 
@@ -85,10 +88,10 @@ object QuadGraphDB {
 
     implicit val dur = Durable(BerkeleyDB.factory(dbFile))
     val vecH = dur.root { implicit tx =>
-      Vec.fill(singleNumNames)(emptyTree[D])
+      Vec.fill(numLayers)(emptyTree[D])
     }
     val res = Processor[Unit]("make-quad") { self =>
-      singleNames.zipWithIndex.foreach { case (name, idx) =>
+      layerNames.zipWithIndex.foreach { case (name, idx) =>
         blocking {
           val nodes = openSingle(name).getAll
           dur.step { implicit tx =>
@@ -96,7 +99,7 @@ object QuadGraphDB {
             nodes.foreach(tree.add)
           }
         }
-        self.progress = (idx + 1).toDouble / singleNumNames
+        self.progress = (idx + 1).toDouble / numLayers
         self.checkAborted()
       }
     }

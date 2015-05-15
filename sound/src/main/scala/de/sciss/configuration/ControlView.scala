@@ -177,8 +177,10 @@ object ControlView {
           val fade = EnvGen.ar(env, gate = "gate".kr(1f), doneAction = freeSelf)
           XOut.ar(0, Limiter.ar(pan / Configuration.numTransducers, level = -0.2.dbamp, dur = limDur), fade)
         }
-        val syn = Synth.play(graphHP, nameHint = Some("hp"))(target = infra.masterGroup, addAction = addAfter /* addToTail */)
-        hpSynth() = Some(syn)
+        val synOpt = infraOption.map { inf =>
+          Synth.play(graphHP, nameHint = Some("hp"))(target = inf.masterGroup, addAction = addAfter /* addToTail */)
+        }
+        hpSynth() = synOpt
       }
     }
 
@@ -349,8 +351,10 @@ object ControlView {
       meterView.strips = strips
       val auralBoidsOpt = valueOpt.map(AuralBoids(_, boids, quad))
       auralBoidsRef.swap(auralBoidsOpt).foreach(_.dispose())
-      if (auralBoidsOn()) auralBoidsOpt.foreach(_.start())
-      if (hpState()) setHPState(true)
+      if (valueOpt.isDefined) {
+        if (auralBoidsOn()) auralBoidsOpt.foreach(_.start())
+        if (hpState()) setHPState(true)
+      }
 
       deferTx {
         pStatus.server = valueOpt.map(_.server.peer)
