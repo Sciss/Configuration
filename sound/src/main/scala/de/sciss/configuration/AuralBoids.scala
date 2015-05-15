@@ -60,17 +60,17 @@ object AuralBoids {
       q.nearestNeighborOption(pt, IntDistanceMeasure2D.euclideanSq).foreach { pn =>
         val node  = pn.node
         val graph = node.input.graph
-        val syn = Synth.play(graph)(target = ch.group, addAction = addToHead)
+        val syn = Synth.playOnce(graph)(target = ch.group, addAction = addToHead)
         syn.write(ch.bus -> "out")
-        val stamp = System.currentTimeMillis()
-        val entry = (stamp, pn)
-        playingNodes += entry
-        syn.onEndTxn { implicit tx =>
-          // syn.definition.dispose()  // XXX TODO - safe to do this here?
-          implicit val itx = tx.peer
-          playingNodes -= entry
-          // println(s"playingNodes.size = ${playingNodes.size}")
-        }
+//        val stamp = System.currentTimeMillis()
+//        val entry = (stamp, pn)
+//        playingNodes += entry
+//        syn.onEndTxn { implicit tx =>
+//          // syn.definition.dispose()  // XXX TODO - safe to do this here?
+//          implicit val itx = tx.peer
+//          playingNodes -= entry
+//          // println(s"playingNodes.size = ${playingNodes.size}")
+//        }
       }
       import numbers.Implicits._
       val delaySeconds  = math.random.linexp(0, 1, 4.0, 30.0)

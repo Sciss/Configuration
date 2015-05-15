@@ -27,12 +27,11 @@ import de.sciss.lucre.stm.TxnLike
 import de.sciss.lucre.swing.impl.ComponentHolder
 import de.sciss.lucre.swing.{View, deferTx}
 import de.sciss.lucre.synth.{Buffer, Bus, Synth, Sys, Txn}
-import de.sciss.swingplus
+import de.sciss.{osc, swingplus, numbers, synth}
 import de.sciss.swingplus.{CloseOperation, OverlayPanel, Spinner}
 import de.sciss.synth.io.{AudioFileType, SampleFormat}
 import de.sciss.synth.swing.j.JServerStatusPanel
 import de.sciss.synth.{Server => SServer, SynthGraph, addAfter, addToHead, addToTail}
-import de.sciss.{numbers, synth}
 
 import scala.collection.breakOut
 import scala.concurrent.stm.Ref
@@ -299,7 +298,15 @@ object ControlView {
         contents += Component.wrap(pStatus)
         if (notMin) contents ++= Seq(butKill, new Label("Test:"), soundTransport)
         contents += ggLayer
+        if (notMin) contents += new ToggleButton("Dump OSC") {
+          listenTo(this)
+          reactions += {
+            case ButtonClicked(_) =>
+              Try(SServer.default).toOption.foreach(_.dumpInOSC(if (selected) osc.Dump.Text else osc.Dump.Off))
+          }
+        }
       }
+
       val tp = new BoxPanel(Orientation.Vertical) {
         contents += tp1
         contents += tp2
