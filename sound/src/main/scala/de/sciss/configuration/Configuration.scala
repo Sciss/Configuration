@@ -76,6 +76,7 @@ object Configuration {
     cursor.step { implicit tx =>
       val boids = BoidProcess[D]
       // boids.period = 0.01 // 5
+      if (minimal) boids.start()
       _controlView = ControlView(boids, quad)
       boot()
     }

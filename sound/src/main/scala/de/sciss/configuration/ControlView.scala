@@ -190,7 +190,8 @@ object ControlView {
     }
 
     private def guiInit(quadH: stm.Source[S#Tx, Tpe[S]], boidRate0: Double, masterVolume0: Int): Unit = {
-      val notMin = !Configuration.minimal
+      val isMin  = Configuration.minimal
+      val notMin = !isMin
 
       quadView  = new SkipQuadtreeView[S, PlacedNode](quadH, cursor, _.coord)
       quadView.setBorder(Swing.EmptyBorder(Boid.excess, Boid.excess, Boid.excess, Boid.excess))
@@ -204,6 +205,7 @@ object ControlView {
       }
 
       val boidsTransport = new ToggleButton("Sim") {
+        selected = isMin
         listenTo(this)
         reactions += {
           case ButtonClicked(_) =>
@@ -243,6 +245,7 @@ object ControlView {
       }
 
       val ggAuralBoids = new ToggleButton("Aural") {
+        selected = isMin
         listenTo(this)
         reactions += {
           case ButtonClicked(_) =>
@@ -341,7 +344,7 @@ object ControlView {
         add(overlay , BorderPanel.Position.Center)
         add(pMeter  , BorderPanel.Position.East  )
 
-        if (!notMin) {
+        if (isMin) {
           val ggShutdown = Button("SHUTDOWN") {
             quit(shutdown = true)
           }
@@ -378,7 +381,7 @@ object ControlView {
 
     private val infraRef      = Ref(Option.empty[Infra])
     private val auralBoidsRef = Ref(Option.empty[AuralBoids[S]])
-    private val auralBoidsOn  = Ref(initialValue = false)
+    private val auralBoidsOn  = Ref(initialValue = Configuration.minimal)
 
     def infraOption(implicit tx: Txn): Option[Infra] = infraRef.get(tx.peer)
 
@@ -394,7 +397,15 @@ object ControlView {
         Vector(st)
       }
       meterView.strips = strips
-      val auralBoidsOpt = valueOpt.map(AuralBoids(_, boids, quad))
+      val auralBoidsOpt = valueOpt.map { inf =>
+        val ab = AuralBoids(inf, boids, quad)
+        ab.react { implicit tx => upd =>
+          deferTx {
+            mLayer.setValue(upd.newLayer)
+          }
+        }
+        ab
+      }
       auralBoidsRef.swap(auralBoidsOpt).foreach(_.dispose())
       if (valueOpt.isDefined) {
         if (auralBoidsOn()) auralBoidsOpt.foreach(_.start())

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Configuration
+Version=0.3.0
+GenericName=Configuration
+Comment=Configuration Sound Installation
+Exec=/home/hhrutz/Documents/devel/Configuration/run.sh
+StartupWMClass=de-sciss-configuration-Configuration
+Icon=/home/hhrutz/Documents/devel/Configuration/icon.png
+Categories=Audio;AudioVideo;
+Terminal=true
+Type=Application

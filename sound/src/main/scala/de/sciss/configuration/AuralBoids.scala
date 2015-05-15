@@ -16,6 +16,8 @@ package de.sciss.configuration
 import java.util.Date
 
 import de.sciss.configuration.QuadGraphDB.PlacedNode
+import de.sciss.lucre.event.Observable
+import de.sciss.lucre.event.impl.ObservableImpl
 import de.sciss.lucre.geom.{IntDistanceMeasure2D, IntPoint2D}
 import de.sciss.lucre.stm.{TxnLike, Disposable}
 import de.sciss.lucre.synth.{Synth, Sys}
@@ -32,10 +34,11 @@ object AuralBoids {
   }
 
   private final class Impl[S <: Sys[S]](infra: Infra, boids: BoidProcess[S], quad: QuadGraphDB[S], layer0: Int)
-    extends AuralBoids[S] {
+    extends AuralBoids[S] with ObservableImpl[S, Update] {
 
-    private val scheduled = TSet.empty[Int]
-    private val layerRef  = Ref(layer0)
+    private val scheduled     = TSet.empty[Int]
+    private val layerRef      = Ref(layer0)
+    private val playingNodes  = TSet.empty[(Long, PlacedNode)] // _1 = time stamp
 
     def start()(implicit tx: S#Tx): Unit = {
       stop()
@@ -43,9 +46,58 @@ object AuralBoids {
       infra.channels.foreach { ch =>
         stepChan(ch)
       }
+
+      stepLayer()
     }
 
-    private val playingNodes = TSet.empty[(Long, PlacedNode)] // _1 = time stamp
+    private def stepLayer()(implicit tx: S#Tx): Unit = {
+      implicit val itx = tx.peer
+      import numbers.Implicits._
+      // XXX TODO - DRY
+      val delaySeconds  = math.random.linlin(0, 1, 10.0, 15.0) * 60   // 10 to 15 minutes
+      val delayFrames   = (delaySeconds * Timeline.SampleRate).toLong
+      val sched         = boids.scheduler
+      val absFrames     = sched.time + delayFrames
+      val tokenRef      = Ref(-1)
+      val token         = sched.schedule(absFrames) { implicit tx =>
+        implicit val itx = tx.peer
+        scheduled -= tokenRef()
+        clearSched()  // don't pick up yet
+
+        infra.channels.foreach { ch =>
+          releaseChan(ch, dur = math.random.linlin(0, 1, 4.0, 8.0))
+        }
+
+        // now wait at least eight seconds so all is calm
+        swapLayer()
+      }
+      tokenRef() = token
+      scheduled += token
+    }
+
+    private def swapLayer()(implicit tx: S#Tx): Unit = {
+      implicit val itx = tx.peer
+      val lyr0 = util.Random.nextInt(QuadGraphDB.numLayers) - 1
+      val old  = layer
+      val lyr  = if (lyr0 < old) lyr0 else lyr0 + 1 // do not repeat previous layer
+      layer = lyr
+      fire(Update(newLayer = lyr))
+      // println(s"NEW LAYER = $lyr")
+
+      // XXX TODO - DRY
+      val delaySeconds  = 12.0    // >= 8
+      val delayFrames   = (delaySeconds * Timeline.SampleRate).toLong
+      val sched         = boids.scheduler
+      val absFrames     = sched.time + delayFrames
+      val tokenRef      = Ref(-1)
+      val token         = sched.schedule(absFrames) { implicit tx =>
+        implicit val itx = tx.peer
+        scheduled -= tokenRef()
+        start()
+      }
+      tokenRef() = token
+      scheduled += token
+    }
 
     def layer(implicit tx: S#Tx): Int = layerRef.get(tx.peer)
 
@@ -88,12 +140,16 @@ object AuralBoids {
       scheduled += token
     }
 
-    private def releaseChan(ch: Infra.Channel)(implicit tx: S#Tx): Unit =
-      ch.group.release(4.0) // XXX TODO
+    private def releaseChan(ch: Infra.Channel, dur: Double = 4.0)(implicit tx: S#Tx): Unit =
+      ch.group.release(dur)
 
     def stop()(implicit tx: S#Tx): Unit = {
-      implicit val itx = tx.peer
       infra.channels.foreach(_.group.freeAll())
+      clearSched()
+    }
+
+    private def clearSched()(implicit tx: S#Tx): Unit = {
+      implicit val itx = tx.peer
       import boids.scheduler
       scheduled.foreach(scheduler.cancel)
       scheduled.clear()
@@ -114,8 +170,10 @@ object AuralBoids {
       }
     }
   }
+
+  case class Update(newLayer: Int)
 }
-trait AuralBoids[S <: Sys[S]] extends Disposable[S#Tx] {
+trait AuralBoids[S <: Sys[S]] extends Disposable[S#Tx] with Observable[S#Tx, AuralBoids.Update] {
   def start()(implicit tx: S#Tx): Unit
   def stop ()(implicit tx: S#Tx): Unit
 
