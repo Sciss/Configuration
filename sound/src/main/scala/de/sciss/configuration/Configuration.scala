@@ -122,11 +122,14 @@ object Configuration {
         val fft       = FFT(fftBuf, in = in \ 0, winType = 1 /* Hann */)
         // val centroid  = Lag.kr(SpecCentroid.kr(fft))
         // val flatness  = Lag.kr(SpecFlatness.kr(fft))
-        val loudness  = Lag.kr(Loudness.kr(fft), time = 4.0).clip(12, 24)
+        val loudFloor = LFNoise1.kr(60.reciprocal).linlin(-1, 1, 10, 13)
+        val loudCeil  = LFNoise1.kr(60.reciprocal).linlin(-1, 1, 20, 25)
+
+        val loudness  = Lag.kr(Loudness.kr(fft), time = 4.0).clip(loudFloor, loudCeil)
         // centroid.poll(1, "cent")
         // flatness.poll(1, "flat")
         // loudness.poll(1, "loud")
-        val lComp     = loudness.linlin(12, 24, 1.0, 0.25)  // compress loud parts
+        val lComp     = loudness.linlin(loudFloor, loudCeil, 1.0, 0.25)  // compress loud parts
         val sig       = sig1 * lComp
         val outBus    = "out".kr
 
