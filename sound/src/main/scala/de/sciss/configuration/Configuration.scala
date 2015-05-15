@@ -28,9 +28,11 @@ object Configuration {
 
   var orderlyQuit = false
 
-  private var controlView: ControlView[D] = _   // created once in `run`
+  private var _controlView: ControlView[D] = _   // created once in `run`
   private var _minimal: Boolean = false
   def minimal: Boolean = _minimal
+
+  def controlView: ControlView[D] = _controlView
 
   private val masterVolumeRef = Ref(0)
   def masterVolume(implicit tx: Txn): Int = masterVolumeRef.get(tx.peer)
@@ -38,10 +40,12 @@ object Configuration {
     require(value > -80 && value <= 0, s"Illegal volume $value dB")
     masterVolumeRef.set(value)(tx.peer)
     import numbers.Implicits._
-    controlView.infraOption.foreach(_.masterGroup.set("amp" -> value.dbamp))
+    _controlView.infraOption.foreach(_.masterGroup.set("amp" -> value.dbamp))
   }
 
   def main(args: Array[String]): Unit = {
+    OutputRedirection()
+
     if (args.headOption == Some("--make")) {
       val proc = QuadGraphDB.make()
       idleThread()
@@ -72,7 +76,7 @@ object Configuration {
     cursor.step { implicit tx =>
       val boids = BoidProcess[D]
       // boids.period = 0.01 // 5
-      controlView = ControlView(boids, quad)
+      _controlView = ControlView(boids, quad)
       boot()
     }
   }
@@ -85,8 +89,8 @@ object Configuration {
   def restart(): Unit = {
     println("Restarting...")
     killSuperCollider()
-    controlView.cursor.step { implicit tx =>
-      controlView.disposeAural()
+    _controlView.cursor.step { implicit tx =>
+      _controlView.disposeAural()
       boot()
     }
   }
@@ -178,7 +182,7 @@ object Configuration {
       Synth.play(graphMaster, nameHint = Some("master"))(target = masterGroup, addAction = addToHead,
         args = List("bus" -> 0, "amp" -> masterVolume.dbamp))
 
-      controlView.infra = infra
+      _controlView.infra = infra
     }
 
     aural.addClient(new AuralSystem.Client {
@@ -186,14 +190,14 @@ object Configuration {
 
       def auralStarted(s: Server)(implicit tx: Txn): Unit = {
         lastServer.set(s)(tx.peer)
-        tx.afterCommit(controlView.cursor.step { implicit tx => started(s) })
+        tx.afterCommit(_controlView.cursor.step { implicit tx => started(s) })
       }
 
       def auralStopped()(implicit tx: Txn): Unit = {
         println("AuralSystem stopped.")
         if (!orderlyQuit) {
           lastServer.get(tx.peer).peer.dispose()
-          controlView.auralBoidsOption.foreach(_.debugPrint())
+          // _controlView.auralBoidsOption.foreach(_.debugPrint())
           tx.afterCommit(restart())
         }
       }

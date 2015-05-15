@@ -19,7 +19,8 @@ final case class ConfigOut(in: GE) extends UGenSource.ZeroOut with WritesBus {
     val sig3  = HPF.ar(sig2, 20)
     val sig = if (ConfigOut.NO_NORMALIZE) sig3 else {
       val env = EnvGen.ar(Env.asr, gate = "gate".kr(1f), doneAction = freeSelf)
-      sig3 * env
+      if (math.random > 0.95) DelayC.ar(sig3, 1000, 1000) else
+        sig3 * env
     }
     val bus   = "out".kr(0f)
     Out.ar(bus, sig)

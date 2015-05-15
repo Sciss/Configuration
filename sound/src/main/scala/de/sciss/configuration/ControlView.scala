@@ -438,6 +438,8 @@ object ControlView {
         sys.exit()
       }
     }
+
+    // def markMemoryExhausted(): Unit = Configuration.killSuperCollider()
   }
 
   private def mkAmpFader[S <: Sys[S]](in0: Double)(implicit csr: stm.Cursor[S])/* (fun: Int => Unit) */: Slider = {
@@ -515,4 +517,6 @@ trait ControlView[S <: Sys[S]] extends View.Cursor[S] {
   def disposeAural()(implicit tx: S#Tx): Unit
 
   def quit(shutdown: Boolean): Unit
+
+  // def markMemoryExhausted(): Unit
 }
