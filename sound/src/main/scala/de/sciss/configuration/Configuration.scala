@@ -42,12 +42,25 @@ object Configuration {
     val quad = QuadGraphDB.open()
     import quad.cursor
 
-    import sys.process._
-    Seq("killall", "scsynth").!
+    killSuperCollider()
     cursor.step { implicit tx =>
       val boids = BoidProcess[D]
       // boids.period = 0.01 // 5
       val view = ControlView(boids, quad)
+      boot(view)
+    }
+  }
+
+  def killSuperCollider(): Unit = {
+    import sys.process._
+    Seq("killall", "scsynth").!
+  }
+
+  def restart[S <: Sys[S]](view: ControlView[S]): Unit = {
+    println("Restarting...")
+    killSuperCollider()
+    view.cursor.step { implicit tx =>
+      view.disposeAural()
       boot(view)
     }
   }
@@ -112,6 +125,7 @@ object Configuration {
         if (!orderlyQuit) {
           lastServer.get(tx.peer).peer.dispose()
           view.auralBoidsOption.foreach(_.debugPrint())
+          tx.afterCommit(restart(view))
         }
       }
     })

@@ -26,11 +26,11 @@ import de.sciss.lucre.stm
 import de.sciss.lucre.stm.TxnLike
 import de.sciss.lucre.swing.impl.ComponentHolder
 import de.sciss.lucre.swing.{View, deferTx}
-import de.sciss.lucre.synth.{Buffer, Bus, Synth, Sys, Txn}
+import de.sciss.lucre.synth.{Server, Buffer, Bus, Synth, Sys, Txn}
 import de.sciss.swingplus.{OverlayPanel, Spinner}
 import de.sciss.synth.io.{AudioFileType, SampleFormat}
 import de.sciss.synth.swing.j.JServerStatusPanel
-import de.sciss.synth.{addAfter, Server, SynthGraph, addToHead, addToTail}
+import de.sciss.synth.{addAfter, Server => SServer, SynthGraph, addToHead, addToTail}
 import de.sciss.{numbers, synth}
 
 import scala.concurrent.stm.Ref
@@ -75,7 +75,8 @@ object ControlView {
     private[this] var quadView  : SkipQuadtreeView[S, PlacedNode] = _
     private[this] var boidsComp : Component = _
     private[this] var pStatus   : JServerStatusPanel = _
-    private[this] var hpSynth   = Option.empty[Synth]
+
+    private[this] val hpSynth   = Ref(Option.empty[Synth])
 
     def init()(implicit tx: S#Tx): this.type = {
       val quadH = quad.handles.head // XXX TODO
@@ -110,7 +111,7 @@ object ControlView {
     private def playSynth(): Unit = {
       stopSynth()
       for {
-        s    <- Try(Server.default).toOption
+        s    <- Try(SServer.default).toOption
         node <- quadView.highlight.headOption
       } {
         val graph = node.node.input.graph // node.chromosome.graph
@@ -154,31 +155,46 @@ object ControlView {
       synthsPlaying = synOpt.toList
     }
 
+    private val hpState = Ref(initialValue = false)
+
+    private def setHPState(state: Boolean)(implicit tx: S#Tx): Unit = {
+      implicit val itx = tx.peer
+      hpSynth.swap(None).foreach { syn =>
+        syn.release()
+      }
+      hpState() = state
+      if (state) {
+        val graphHP = SynthGraph {
+          import synth._
+          import ugen._
+          val in    = In.ar(0, Configuration.numTransducers)
+          val pan   = SplayAz.ar(numChannels = 2, in = in)
+          val limDur = 0.01
+          val env    = new Env(0.0, Vec[Env.Segment](
+            (limDur, 0.0, Curve.linear),
+            (0.2, 1.0, Curve.sine), (0.2, 0.0, Curve.sine), (limDur, 0.0, Curve.linear)), 2)
+          // val fade  = EnvGen.ar(Env.asr(0.2, 1, 0.2, Curve.linear), gate = "gate".kr(1f), doneAction = freeSelf)
+          val fade = EnvGen.ar(env, gate = "gate".kr(1f), doneAction = freeSelf)
+          XOut.ar(0, Limiter.ar(pan / Configuration.numTransducers, level = -0.2.dbamp, dur = limDur), fade)
+        }
+        val syn = Synth.play(graphHP, nameHint = Some("hp"))(target = infra.masterGroup, addAction = addAfter /* addToTail */)
+        hpSynth() = Some(syn)
+      }
+    }
+
     private def guiInit(quadH: stm.Source[S#Tx, Tpe[S]], boidRate0: Double): Unit = {
 
       quadView  = new SkipQuadtreeView[S, PlacedNode](quadH, cursor, _.coord)
       quadView.setBorder(Swing.EmptyBorder(Boid.excess, Boid.excess, Boid.excess, Boid.excess))
 
       pStatus = new JServerStatusPanel(JServerStatusPanel.COUNTS)
-      //      def boot(): Unit = {
-      //        val cfg = Server.Config()
-      //        cfg.memorySize = 256 * 1024
-      //        cfg.pickPort()
-      //        val connect = Server.boot(config = cfg) {
-      //          case ServerConnection.Running(s) =>
-      //          case ServerConnection.Aborted    =>
-      //        }
-      //        pStatus.booting = Some(connect)
-      //      }
 
       val butKill = Button("Kill") {
         import scala.sys.process._
-        Try(Server.default).toOption.foreach(_.dispose())
+        Try(SServer.default).toOption.foreach(_.dispose())
         "killall scsynth".!
       }
 
-      // pStatus.bootAction = Some(boot)
-      // val boidsTransport = Transport.makeButtonStrip(Seq(Transport.Stop(stopBoids()), Transport.Play(startBoids())))
       val boidsTransport = new ToggleButton("Sim") {
         listenTo(this)
         reactions += {
@@ -233,30 +249,9 @@ object ControlView {
         listenTo(this)
         reactions += {
           case ButtonClicked(_) =>
-            hpSynth.foreach { syn =>
-              quad.cursor.step { implicit tx =>
-                syn.release()
-              }
-              hpSynth = None
-            }
-            if (selected) {
-              val graphHP = SynthGraph {
-                import synth._
-                import ugen._
-                val in    = In.ar(0, Configuration.numTransducers)
-                val pan   = SplayAz.ar(numChannels = 2, in = in)
-                val limDur = 0.01
-                val env    = new Env(0.0, Vec[Env.Segment](
-                  (limDur, 0.0, Curve.linear),
-                  (0.2, 1.0, Curve.sine), (0.2, 0.0, Curve.sine), (limDur, 0.0, Curve.linear)), 2)
-                // val fade  = EnvGen.ar(Env.asr(0.2, 1, 0.2, Curve.linear), gate = "gate".kr(1f), doneAction = freeSelf)
-                val fade = EnvGen.ar(env, gate = "gate".kr(1f), doneAction = freeSelf)
-                XOut.ar(0, Limiter.ar(pan / Configuration.numTransducers, level = -0.2.dbamp, dur = limDur), fade)
-              }
-              val syn = quad.cursor.step { implicit tx =>
-                Synth.play(graphHP, nameHint = Some("hp"))(target = infra.masterGroup, addAction = addAfter /* addToTail */)
-              }
-              hpSynth = Some(syn)
+            val state = selected
+            quad.cursor.step { implicit tx =>
+              setHPState(state)
             }
         }
       }
@@ -342,16 +337,23 @@ object ControlView {
 
     def infra(implicit tx: S#Tx): Infra = infraRef.get(tx.peer).getOrElse(sys.error("infra was not set yet"))
 
-    def infra_=(value: Infra)(implicit tx: S#Tx): Unit = {
+    def infra_=(value: Infra)(implicit tx: S#Tx): Unit = setInfra(Some(value))
+
+    private def setInfra(valueOpt: Option[Infra])(implicit tx: S#Tx): Unit = {
       implicit val itx = tx.peer
-      infraRef() = Some(value)
-      val strip = AudioBusMeter.Strip(Bus.soundOut(value.server, Configuration.numTransducers), value.masterGroup, addToTail)
-      meterView.strips = Vector(strip)
-      val auralBoids = AuralBoids(infra, boids, quad)
-      auralBoidsRef.swap(Some(auralBoids)).foreach(_.dispose())
-      if (auralBoidsOn()) auralBoids.start()
+      infraRef() = valueOpt
+      val strips = valueOpt.fold(Vector.empty[AudioBusMeter.Strip]) { value =>
+        val st = AudioBusMeter.Strip(Bus.soundOut(value.server, Configuration.numTransducers), value.masterGroup, addToTail)
+        Vector(st)
+      }
+      meterView.strips = strips
+      val auralBoidsOpt = valueOpt.map(AuralBoids(_, boids, quad))
+      auralBoidsRef.swap(auralBoidsOpt).foreach(_.dispose())
+      if (auralBoidsOn()) auralBoidsOpt.foreach(_.start())
+      if (hpState()) setHPState(true)
+
       deferTx {
-        pStatus.server = Some(value.server.peer)
+        pStatus.server = valueOpt.map(_.server.peer)
         SwingUtilities.getWindowAncestor(component.peer) match {
           case jf: JFrame => jf.pack()
         }
@@ -359,6 +361,17 @@ object ControlView {
     }
 
     def auralBoidsOption(implicit tx: TxnLike): Option[AuralBoids[S]] = auralBoidsRef.get(tx.peer)
+
+    def disposeAural()(implicit tx: S#Tx): Unit = {
+      setInfra(None)
+      hpSynth.swap(None)(tx.peer)
+      deferTx {
+        synthsPlaying = Nil
+      }
+      tx.afterCommit {
+        Try(SServer.default).toOption.foreach(_.dispose())
+      }
+    }
   }
 }
 trait ControlView[S <: Sys[S]] extends View.Cursor[S] {
@@ -370,4 +383,6 @@ trait ControlView[S <: Sys[S]] extends View.Cursor[S] {
   def quad: QuadGraphDB[S]
 
   def auralBoidsOption(implicit tx: TxnLike): Option[AuralBoids[S]]
+
+  def disposeAural()(implicit tx: S#Tx): Unit
 }

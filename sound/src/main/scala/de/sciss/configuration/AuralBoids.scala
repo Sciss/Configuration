@@ -13,6 +13,8 @@
 
 package de.sciss.configuration
 
+import java.util.Date
+
 import de.sciss.configuration.QuadGraphDB.PlacedNode
 import de.sciss.lucre.geom.{IntDistanceMeasure2D, IntPoint2D}
 import de.sciss.lucre.stm.{TxnLike, Disposable}
@@ -42,7 +44,7 @@ object AuralBoids {
       }
     }
 
-    private val playingNodes = TSet.empty[PlacedNode]
+    private val playingNodes = TSet.empty[(Long, PlacedNode)] // _1 = time stamp
 
     private def stepChan(ch: Infra.Channel)(implicit tx: S#Tx): Unit = {
       implicit val itx = tx.peer
@@ -50,15 +52,18 @@ object AuralBoids {
       val q             = quad.handles(layer).apply()
       val loc           = boids.state.apply(ch.index).location
       val pt            = IntPoint2D((loc.x + 0.5f).toInt, (loc.y + 0.5f).toInt)
-      q.nearestNeighborOption(pt, IntDistanceMeasure2D.euclideanSq).foreach { node =>
-        val graph = node.node.input.graph
+      q.nearestNeighborOption(pt, IntDistanceMeasure2D.euclideanSq).foreach { pn =>
+        val node  = pn.node
+        val graph = node.input.graph
         val syn = Synth.play(graph)(target = ch.group, addAction = addToHead)
         syn.write(ch.bus -> "out")
-        playingNodes += node
+        val stamp = System.currentTimeMillis()
+        val entry = (stamp, pn)
+        playingNodes += entry
         syn.onEndTxn { implicit tx =>
           // syn.definition.dispose()  // XXX TODO - safe to do this here?
           implicit val itx = tx.peer
-          playingNodes -= node
+          playingNodes -= entry
           // println(s"playingNodes.size = ${playingNodes.size}")
         }
       }
@@ -94,9 +99,10 @@ object AuralBoids {
     def debugPrint()(implicit tx: TxnLike): Unit = {
       implicit val itx = tx.peer
       println("------- LAST ACTIVE NODES -------")
-      playingNodes.foreach { n =>
-        println(n)
-        val ugens = n.node.input.graph.sources.collect {
+      playingNodes.toIndexedSeq.sortBy(_._1).takeRight(4).foreach { case (stamp, pn) =>
+        println(new Date(stamp).toString)
+        println(pn)
+        val ugens = pn.node.input.graph.sources.collect {
           case p: Product => p.productPrefix
         } .toSet.toIndexedSeq.sorted
         println(ugens.mkString("[", ", ", "]"))
