@@ -77,7 +77,7 @@ object AuralBoids {
 
     private def swapLayer()(implicit tx: S#Tx): Unit = {
       implicit val itx = tx.peer
-      val lyr0 = util.Random.nextInt(QuadGraphDB.numLayers) - 1
+      val lyr0 = util.Random.nextInt(QuadGraphDB.numLayers - 1)
       val old  = layer
       val lyr  = if (lyr0 < old) lyr0 else lyr0 + 1 // do not repeat previous layer
       layer = lyr
