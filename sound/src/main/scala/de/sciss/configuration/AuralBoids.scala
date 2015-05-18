@@ -54,7 +54,11 @@ object AuralBoids {
       implicit val itx = tx.peer
       import numbers.Implicits._
       // XXX TODO - DRY
-      val delaySeconds  = math.random.linlin(0, 1, 10.0, 15.0) * 60   // 10 to 15 minutes
+      val lyr           = layer
+      val short         = lyr > 2
+      val dlyMinMins    = if (short)  7.5 else 10.0
+      val dlyMaxMins    = if (short) 10.0 else 15.0
+      val delaySeconds  = math.random.linlin(0, 1, dlyMinMins, dlyMaxMins) * 60   // 10 to 15 minutes
       val delayFrames   = (delaySeconds * Timeline.SampleRate).toLong
       val sched         = boids.scheduler
       val absFrames     = sched.time + delayFrames
