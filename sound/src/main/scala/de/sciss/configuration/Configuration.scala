@@ -26,13 +26,24 @@ import scala.concurrent.stm.Ref
 object Configuration {
   final val numTransducers = 9
 
-  final val USE_LOUDNESS = false
+  final val USE_LOUDNESS = true
 
   var orderlyQuit = false
 
   private var _controlView: ControlView[D] = _   // created once in `run`
-  private var _minimal: Boolean = false
-  def minimal: Boolean = _minimal
+  private var _minimal      : Boolean = false
+  private var _oldLoudness  : Boolean = false
+  private var _loudnessLo   : Float   = 12.0f
+  private var _loudnessHi   : Float   = 18.0f
+  private var _loudnessCmp  : Float   = 0.25f
+  private var _loudnessFreq : Float   = 800f
+
+  def minimal     : Boolean = _minimal
+  def oldLoudness : Boolean = _oldLoudness
+  def loudnessLo  : Float   = _loudnessLo
+  def loudnessHi  : Float   = _loudnessHi
+  def loudnessCmp : Float   = _loudnessCmp
+  def loudnessFreq: Float   = _loudnessFreq
 
   def controlView: ControlView[D] = _controlView
 
@@ -62,6 +73,11 @@ object Configuration {
         // opt[Int]('m', "num-matches") text "Maximum number of matches (default 1)" action { (i,_) => numMatches = i }
         // arg[File]("input") required() text "Meta file of input to process" action { (f,_) => inFile = f }
         opt[Unit]("minimal") text "Minimal GUI, no testing buttons" action { (_,_) => _minimal = true }
+        opt[Unit]("old-mode") text "Old loudness mode" action { (_,_) => _oldLoudness = true }
+        opt[Double]("loudness-low"   ) text "Loudness comp low  threshold"  action { (v,_) => _loudnessLo   = v.toFloat }
+        opt[Double]("loudness-high"  ) text "Loudness comp high threshold"  action { (v,_) => _loudnessHi   = v.toFloat }
+        opt[Double]("loudness-amount") text "Loudness comp amount"          action { (v,_) => _loudnessCmp  = v.toFloat }
+        opt[Double]("loudness-freq"  ) text "Loudness comp min freq"        action { (v,_) => _loudnessFreq = v.toFloat }
       }
       if (!parser.parse(args)) sys.exit(1)
       masterVolumeRef.single.set(masterVolume0)
@@ -128,16 +144,28 @@ object Configuration {
         val sig = if (USE_LOUDNESS) {
           val fftBuf = LocalBuf(512, 1)
           val fft = FFT(fftBuf, in = in \ 0, winType = 1 /* Hann */)
-          // val centroid  = Lag.kr(SpecCentroid.kr(fft))
-          // val flatness  = Lag.kr(SpecFlatness.kr(fft))
-          val loudFloor = LFNoise1.kr(60.reciprocal).linlin(-1, 1, 10, 13)
-          val loudCeil = LFNoise1.kr(60.reciprocal).linlin(-1, 1, 20, 25)
 
-          val loudness = Lag.kr(Loudness.kr(fft), time = 4.0).clip(loudFloor, loudCeil)
-          // centroid.poll(1, "cent")
-          // flatness.poll(1, "flat")
-          // loudness.poll(1, "loud")
-          val lComp = loudness.linlin(loudFloor, loudCeil, 1.0, 0.25) // compress loud parts
+          val lComp = if (oldLoudness) {
+            val loudFloor = LFNoise1.kr(60.reciprocal).linlin(-1, 1, 10, 13)
+            val loudCeil  = LFNoise1.kr(60.reciprocal).linlin(-1, 1, 20, 25)
+            val loudness  = Lag.kr(Loudness.kr(fft), time = 4.0).clip(loudFloor, loudCeil)
+            loudness.linlin(loudFloor, loudCeil, 1.0, 0.25) // compress loud parts
+          } else {
+            val tMask   = Delay1.kr(1)  // bug in Loudness initialization!!
+            val loud0   = Loudness    .kr(fft, tmask = tMask)
+            val cent0   = SpecCentroid.kr(fft)
+            val flat0   = SpecFlatness.kr(fft)
+            val lagTime = 2.0 // 1.0 // 0.5
+            val loud    = Lag.kr(loud0, time = lagTime)
+            val freqOk  = Lag.kr(cent0 > loudnessFreq, time = lagTime)
+            val flat    = Lag.kr(flat0, time = lagTime)
+
+            val loudN   = loud.clip(loudnessLo, loudnessHi).linlin(loudnessLo, loudnessHi, 0.0, 1.0)
+            val flatN   = flat.clip(0.10, 0.175).linlin(0.175, 0.10, 0.0, 1.0)
+            val compAmt = loudN * flatN * freqOk
+            val compSig = compAmt.linlin(0, 1, 1.0, loudnessCmp)
+            compSig
+          }
           sig1 * lComp
         } else sig1
 
