@@ -133,18 +133,19 @@ object ControlView {
       // around with incomplete AIFF headers.
       val fileFormat = new SimpleDateFormat(s"'rec'-yyMMdd'_'HHmmss'.irc'", Locale.US)
       val f = file("rec") / fileFormat.format(new Date())
+      val numCh = mNumRecChannels.getNumber.intValue()
       val synOpt = cursor.step { implicit tx =>
         infraOption.map { inf =>
           val graph = SynthGraph {
             import synth._
             import ugen._
             FreeSelf.kr("gate".kr(1f) <= 0) // because stopSynth uses `release`
-            DiskOut.ar("buf".kr, In.ar("bus".kr, 2))
+            DiskOut.ar("buf".kr, In.ar("bus".kr, numChannels = numCh))
           }
           val path  = f.absolutePath
           println(s"Recording to '$path'")
           val buf   = Buffer.diskOut(inf.server)(path = path, fileType = AudioFileType.IRCAM,
-            sampleFormat = SampleFormat.Float, numChannels = 2)
+            sampleFormat = SampleFormat.Float, numChannels = numCh)
           val syn   = Synth.play(graph)(target = inf.server.defaultGroup /* masterGroup */,
             addAction = addToTail /* addAfter */, dependencies = buf :: Nil)
           syn.onEndTxn { implicit tx =>
@@ -160,7 +161,8 @@ object ControlView {
 
     private val hpState = Ref(initialValue = false)
 
-    private var mLayer: SpinnerNumberModel = _
+    private var mLayer          : SpinnerNumberModel = _
+    private var mNumRecChannels : SpinnerNumberModel = _
 
     private def setHPState(state: Boolean)(implicit tx: S#Tx): Unit = {
       implicit val itx = tx.peer
@@ -212,6 +214,9 @@ object ControlView {
             if (selected) startBoids() else stopBoids()
         }
       }
+
+      mNumRecChannels       = new SpinnerNumberModel(2, 1, Configuration.numTransducers, 1)
+      val ggNumRecChannels  = new Spinner(mNumRecChannels)
 
       val soundTransport = Transport.makeButtonStrip(Seq(
         Transport.Stop(stopSynth()), Transport.Play(playSynth()), Transport.Record(recordSound())))
@@ -299,7 +304,8 @@ object ControlView {
       val tp2 = new FlowPanel(new Label("Server:")) {
         if (notMin) contents += ggHP
         contents += Component.wrap(pStatus)
-        if (notMin) contents ++= Seq(butKill, new Label("Test:"), soundTransport)
+        if (notMin) contents ++= Seq(butKill, new Label("Test:"), soundTransport, new Label("# Chans:"), ggNumRecChannels)
+        contents += new Label("Layer:")
         contents += ggLayer
         if (notMin) contents += new ToggleButton("Dump OSC") {
           listenTo(this)

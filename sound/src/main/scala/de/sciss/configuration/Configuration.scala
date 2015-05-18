@@ -26,6 +26,8 @@ import scala.concurrent.stm.Ref
 object Configuration {
   final val numTransducers = 9
 
+  final val USE_LOUDNESS = false
+
   var orderlyQuit = false
 
   private var _controlView: ControlView[D] = _   // created once in `run`
@@ -123,19 +125,22 @@ object Configuration {
         // sig .poll(sig .abs > 1, label = "LIM ")
         // val sig = sig0
 
-        val fftBuf    = LocalBuf(512, 1)
-        val fft       = FFT(fftBuf, in = in \ 0, winType = 1 /* Hann */)
-        // val centroid  = Lag.kr(SpecCentroid.kr(fft))
-        // val flatness  = Lag.kr(SpecFlatness.kr(fft))
-        val loudFloor = LFNoise1.kr(60.reciprocal).linlin(-1, 1, 10, 13)
-        val loudCeil  = LFNoise1.kr(60.reciprocal).linlin(-1, 1, 20, 25)
+        val sig = if (USE_LOUDNESS) {
+          val fftBuf = LocalBuf(512, 1)
+          val fft = FFT(fftBuf, in = in \ 0, winType = 1 /* Hann */)
+          // val centroid  = Lag.kr(SpecCentroid.kr(fft))
+          // val flatness  = Lag.kr(SpecFlatness.kr(fft))
+          val loudFloor = LFNoise1.kr(60.reciprocal).linlin(-1, 1, 10, 13)
+          val loudCeil = LFNoise1.kr(60.reciprocal).linlin(-1, 1, 20, 25)
 
-        val loudness  = Lag.kr(Loudness.kr(fft), time = 4.0).clip(loudFloor, loudCeil)
-        // centroid.poll(1, "cent")
-        // flatness.poll(1, "flat")
-        // loudness.poll(1, "loud")
-        val lComp     = loudness.linlin(loudFloor, loudCeil, 1.0, 0.25)  // compress loud parts
-        val sig       = sig1 * lComp
+          val loudness = Lag.kr(Loudness.kr(fft), time = 4.0).clip(loudFloor, loudCeil)
+          // centroid.poll(1, "cent")
+          // flatness.poll(1, "flat")
+          // loudness.poll(1, "loud")
+          val lComp = loudness.linlin(loudFloor, loudCeil, 1.0, 0.25) // compress loud parts
+          sig1 * lComp
+        } else sig1
+
         val outBus    = "out".kr
 
 //        val pollTr    = outBus.sig_==(0) * Impulse.kr(30)
