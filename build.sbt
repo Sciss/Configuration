@@ -2,7 +2,7 @@ lazy val baseName = "Configuration"
 
 def baseNameL = baseName.toLowerCase
 
-lazy val projectVersion   = "0.4.0"
+lazy val projectVersion   = "0.4.1-SNAPSHOT"
 
 lazy val commonSettings = Project.defaultSettings ++ Seq(
   version            := projectVersion,
@@ -47,6 +47,19 @@ lazy val sound = Project(
     ),
     mainClass in assembly := Some("de.sciss.configuration.Configuration"),
     assemblyJarName in assembly := s"$baseName.jar",
+    target in assembly := baseDirectory.value
+  )
+)
+
+lazy val suicide = Project(
+  id        = s"$baseNameL-suicide",
+  base      = file("suicide"),
+  settings  = commonSettings ++ Seq(
+    name        := s"$baseName-suicide",
+    description := "Kills scsynth when necessary",
+    autoScalaLibrary := false,
+    mainClass in assembly := Some("de.sciss.configuration.Suicide"),
+    assemblyJarName in assembly := s"suicide.jar",
     target in assembly := baseDirectory.value
   )
 )
