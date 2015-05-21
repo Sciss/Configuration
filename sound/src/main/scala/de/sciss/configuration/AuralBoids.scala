@@ -56,7 +56,8 @@ object AuralBoids {
       // XXX TODO - DRY
       val lyr           = layer
       val short         = lyr > 2
-      val dlyMinMins    = if (short)  7.5 else 10.0
+      // val dlyMinMins    = if (short)  7.5 else 10.0
+      val dlyMinMins    = if (short)  5.0 else  7.5
       val dlyMaxMins    = if (short) 10.0 else 15.0
       val delaySeconds  = math.random.linlin(0, 1, dlyMinMins, dlyMaxMins) * 60   // 10 to 15 minutes
       val delayFrames   = (delaySeconds * Timeline.SampleRate).toLong
@@ -89,7 +90,8 @@ object AuralBoids {
       // println(s"NEW LAYER = $lyr")
 
       // XXX TODO - DRY
-      val delaySeconds  = 12.0    // >= 8
+      import numbers.Implicits._
+      val delaySeconds  = math.random.linlin(0, 1, 12.0, 18.0)  // >= 8
       val delayFrames   = (delaySeconds * Timeline.SampleRate).toLong
       val sched         = boids.scheduler
       val absFrames     = sched.time + delayFrames
