@@ -139,28 +139,19 @@ object Configuration {
   }
 
   private def mkMovingEQ(in: GE): GE = {
-    val poll        = false
-    // val numChannels = 1
+    val poll = false
 
     import synth._
     import ugen._
 
-    // val hi = BHiShelf.ar(in = ..., freq = ..., rs = ..., gain /* dB */ = ...)
-    // val lo = BLoShelf.ar(in = ..., freq = ..., rs = ..., gain /* dB */ = ...)
-
-    val infC = inf // Seq.fill(numChannels)(inf)
-
-    val dFreq = Dbrown(lo =   0  , hi = 1, step = 0.05, length = infC).linexp(0, 1, 100 /* 200 */, 8000)
-    val dGain = Dbrown(lo = -30  , hi = 0, step = 2.0 , length = infC) // .min(0)
-    val dQ    = Dbrown(lo =   0.3, hi = 1, step = 0.1 , length = infC)
+    val dFreq = Dbrown(lo =   0  , hi = 1, step = 0.05, length = inf).linexp(0, 1, 100 /* 200 */, 8000)
+    val dGain = Dbrown(lo = -30  , hi = 0, step = 2.0 , length = inf) // .min(0)
+    val dQ    = Dbrown(lo =   0.3, hi = 1, step = 0.1 , length = inf)
 
     def mkFilter(trig: GE, pl: String): GE = {
-      // val dFreq = Dbrown(lo =   0  , hi = 1, step = 0.05, length = infC).linexp(0, 1, 100 /* 200 */, 8000)
-      // val dGain = Dbrown(lo = -30  , hi = 0, step = 2.0 , length = infC) // .min(0)
-      // val dQ    = Dbrown(lo =   0.3, hi = 1, step = 0.1 , length = infC)
-      val freq  = Demand.kr(trig = trig, dFreq).max(100)    // the author of Demand should be decapitated
+      val freq  = Demand.kr(trig = trig, dFreq).max(100)    // Demand init bug!
       val gain  = Demand.kr(trig = trig, dGain)
-      val q     = Demand.kr(trig = trig, dQ   ).max(0.3)    // the author of Demand should be decapitated
+      val q     = Demand.kr(trig = trig, dQ   ).max(0.3)    // Demand init bug!
       val freqL = Lag.kr(freq, 1)
       val gainL = Lag.kr(gain, 1)
       val rqL   = Lag.kr(q.reciprocal, 1)
@@ -171,18 +162,10 @@ object Configuration {
         (Flatten(rqL  ) \ 0).poll(1, label = s"rq  $pl")
       }
 
-      //  CheckBadValues.ar(in, id = 1000)
-      val pk    = BPeakEQ .ar(in = in, freq = freqL, rq = rqL, gain /* dB */ = gainL)
-      //      CheckBadValues.ar(pk, id = 2000)
-      //      val check = Impulse.kr(0)
-      //      in   .poll(check, "--in")
-      //      freqL.poll(check, "--fr")
-      //      rqL  .poll(check, "--rq")
-      //      gainL.poll(check, "--ga")
-      pk
+      BPeakEQ .ar(in = in, freq = freqL, rq = rqL, gain /* dB */ = gainL)
     }
 
-    val dTr = Dwhite(lo = 10, hi = 40, length = infC)
+    val dTr = Dwhite(lo = 10, hi = 40, length = inf)
     val tr  = TDuty.kr(dur = dTr)
     val tr1 = PulseDivider.kr(tr, div = 2, start = 0)  // triggers second
     val tr2 = PulseDivider.kr(tr, div = 2, start = 1)  // triggers first
