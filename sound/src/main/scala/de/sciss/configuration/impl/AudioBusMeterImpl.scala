@@ -74,11 +74,13 @@ object AudioBusMeterImpl {
           val graph = SynthGraph {
             import synth._
             import ugen._
-            val sig   = In.ar("bus".ir, numChannels)
-            val tr    = Impulse.kr(20)
-            val peak  = Peak.kr(sig, tr)
-            val rms   = A2K.kr(Lag.ar(sig.squared, 0.1))
-            SendReply.kr(tr, Flatten(Zip(peak, rms)), "/$meter")
+            val sig     = In.ar("bus".ir, numChannels)
+            val tr      = Impulse.kr(20)
+            val peak    = Peak.kr(sig, tr)
+            val rms     = A2K.kr(Lag.ar(sig.squared, 0.1))
+            val values  = Flatten(Zip(peak, rms))
+            // CheckBadValues.kr(values)
+            SendReply.kr(tr, values, "/$meter")
           }
 
           stripsByChannels.foreach { strip =>

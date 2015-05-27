@@ -2,7 +2,7 @@ lazy val baseName = "Configuration"
 
 def baseNameL = baseName.toLowerCase
 
-lazy val projectVersion   = "0.4.1-SNAPSHOT"
+lazy val projectVersion   = "0.5.0"
 
 lazy val commonSettings = Project.defaultSettings ++ Seq(
   version            := projectVersion,
@@ -41,7 +41,8 @@ lazy val sound = Project(
       "de.sciss"          %% "soundprocesses-views"     % "2.18.1",
       "de.sciss"          %% "lucredata-core"           % "2.3.1",
       "de.sciss"          %% "lucredata-views"          % "2.3.1",
-      "de.sciss"          %% "scalacolliderswing-core"  % "1.25.0",
+      "de.sciss"          %% "scalacollider"            % "1.17.2",
+      "de.sciss"          %% "scalacolliderswing-core"  % "1.25.1",
       "de.sciss"          %% "lucrestm-bdb"             % "2.1.1",
       "com.github.scopt"  %% "scopt"                    % "3.3.0"
     ),
