@@ -15,10 +15,13 @@ package de.sciss.configuration.video.text
 
 import java.awt.image.BufferedImage
 import java.awt.{Point, Color, Font, LayoutManager, RenderingHints}
-import java.io.FileInputStream
+import java.io.{FileOutputStream, File, FileInputStream}
 import javax.imageio.ImageIO
 import javax.swing.JPanel
 
+import com.itextpdf.awt.PdfGraphics2D
+import com.itextpdf.text.pdf.PdfWriter
+import com.itextpdf.text.{Document => IDocument, Rectangle => IRectangle}
 import de.sciss.file._
 import de.sciss.{numbers, kollflitz}
 import de.sciss.processor.Processor
@@ -187,6 +190,17 @@ object Visual {
       }
     }
 
+    private var _maxWidth = 320
+    def maxWidth: Int = _maxWidth
+    def maxWidth_=(value: Int): Unit = if (_maxWidth != value) {
+      visDo {
+        stopAnimation()
+        _maxWidth = value
+        setText(_text)
+        startAnimation()
+      }
+    }
+
     private def setText(value: String): Unit = {
       _text = value
 
@@ -218,8 +232,6 @@ object Visual {
         wordVec :+= w
         w
       }
-
-      val maxWidth = 320 // 360 // 400
 
       @tailrec def mkLines(words: Vec[Word], rem: Vec[Word], width: Int, res: Vec[Line]): Vec[Line] = {
         def flush(): Line = {
@@ -546,14 +558,52 @@ object Visual {
       }
     }
 
-    def saveFrameAsPNG(file: File): Unit = saveFrameAsPNG(file, width = _dsp.getWidth, height = _dsp.getHeight)
+    private def saveFrameAsPDF(file: File, width: Int, height: Int, dpi: Double): Unit = {
+      val scale     = 72.0 / dpi
+      val widthU    = width  * scale // 'user units'
+      val heightH   = height * scale // 'user units'
+      val pageSize  = new IRectangle(0, 0, widthU.toFloat, heightH.toFloat)
+      val margin    = 0
+      val doc       = new IDocument(pageSize, margin, margin, margin, margin)
+      val stream    = new FileOutputStream(file)
+      val writer    = PdfWriter.getInstance(doc, stream)
 
-    def saveFrameAsPNG(file: File, width: Int, height: Int): Unit = {
+      doc.open()
+      try {
+        val cb = writer.getDirectContent
+        val tp = cb.createTemplate(width, height)
+        // use `onlyShapes = true` until we deal with the font-mapper!
+        val g2 = new PdfGraphics2D(tp, width, height, true /*, fontMapper */)
+        g2.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON)
+        try {
+          _dsp.damageReport() // force complete redrawing
+          _dsp.paintDisplay(g2, new Dimension(width, height))
+          // view.render(g2)
+        } finally {
+          g2.dispose()
+        }
+        // tp.setHorizontalScaling((scale * 100).toFloat)
+        cb.addTemplate(tp, margin, margin)
+      } finally {
+        doc.close()
+      }
+    }
+
+    def saveFrame(file: File): Unit = saveFrame(file, width = _dsp.getWidth, height = _dsp.getHeight,
+      format = VideoSettings.Format.PNG, dpi = 300)
+
+    def saveFrame(file: File, width: Int, height: Int, format: VideoSettings.Format, dpi: Double): Unit =
+      format match {
+        case VideoSettings.Format.PNG => saveFrameAsPNG(file = file, width = width, height = height)
+        case VideoSettings.Format.PDF => saveFrameAsPDF(file = file, width = width, height = height, dpi = dpi)
+      }
+
+    private def saveFrameAsPNG(file: File, width: Int, height: Int): Unit = {
       // requireEDT()
       val bImg  = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
       val g     = bImg.createGraphics()
       // val scale = width.toDouble / VIDEO_WIDTH_SQR
-      val p0 = new Point(0, 0)
+      // val p0 = new Point(0, 0)
       try {
         _dsp.damageReport() // force complete redrawing
         // _dsp.zoom(p0, scale)
@@ -578,7 +628,7 @@ object Visual {
       blocking(Await.result(p.future, Duration.Inf)) //  Duration(20, TimeUnit.SECONDS)))
     }
 
-    def saveFrameSeriesAsPNG(settings: VideoSettings): Processor[Unit] = {
+    def saveFrameSeries(settings: VideoSettings): Processor[Unit] = {
       import settings.{text => _, _}
       import ExecutionContext.Implicits.global
 
@@ -598,7 +648,7 @@ object Visual {
         var frame = 0
 
         // def mkF() = parent / f"$child${frame - framesSkip}%05d.png"
-        def mkF() = parent / f"$child${frame - framesSkip}%d.png"
+        def mkF() = parent / f"$child${frame - framesSkip}%d.${format.ext}"
 
         var startAnim = anim.head
         var stopAnim  = startAnim
@@ -648,7 +698,7 @@ object Visual {
           if (frameSave >= 0) {
             val f = mkF()
             execOnEDT {
-              saveFrameAsPNG(f, width = width, height = height)
+              saveFrame(f, width = width, height = height, format = format, dpi = dpi)
               // _dsp.damageReport() // force complete redrawing
               // _dsp.paintDisplay(g, new Dimension(width, height))
               // ImageIO.write(bImg, "png", f)
@@ -688,7 +738,7 @@ object Visual {
               } catch {
                 case NonFatal(e) => e.printStackTrace()
               }
-              saveFrameAsPNG(f, width = width, height = height)
+              saveFrame(f, width = width, height = height, format = format, dpi = dpi)
               animationStep()
             }
             frame += 1
@@ -734,15 +784,17 @@ trait Visual {
 
   var text: String
 
+  var maxWidth: Int
+
   def animationStep(): Unit
 
   var runAnimation: Boolean
 
-  def saveFrameAsPNG(file: File): Unit
+  def saveFrame(file: File): Unit
 
-  def saveFrameAsPNG(file: File, width: Int, height: Int): Unit
+  def saveFrame(file: File, width: Int, height: Int, format: VideoSettings.Format, dpi: Double): Unit
 
-  def saveFrameSeriesAsPNG(settings: VideoSettings): Processor[Unit]
+  def saveFrameSeries(settings: VideoSettings): Processor[Unit]
 
   def forceParameters: Map[String, Map[String, Float]]
 

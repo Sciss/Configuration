@@ -17,7 +17,7 @@ package video
 import java.text.SimpleDateFormat
 import java.util.{Date, Locale}
 
-import de.sciss.configuration.video.text.VideoSettings
+import de.sciss.configuration.video.text.{Text2, Text1, TextLike, VideoSettings}
 import de.sciss.file._
 import de.sciss.kollflitz.Vec
 import de.sciss.processor.Processor
@@ -26,17 +26,39 @@ import prefuse.util.ui.JForcePanel
 import scala.collection.breakOut
 import scala.swing.Swing._
 import scala.swing.event.ButtonClicked
-import scala.swing.{ScrollPane, BoxPanel, BorderPanel, Button, Component, FlowPanel, Frame, Orientation, ProgressBar, SplitPane, SwingApplication, ToggleButton}
+import scala.swing.{BorderPanel, BoxPanel, Button, Component, FlowPanel, Frame, Orientation, ProgressBar, ScrollPane, SplitPane, Swing, ToggleButton}
 import scala.util.{Failure, Success}
 
-object Text extends SwingApplication {
-  def startup(args: Array[String]): Unit = {
+object Text  {
+  case class Config(text: TextLike = Text1, format: VideoSettings.Format = VideoSettings.Format.PNG,
+                    dpi: Double = 72.0)
+
+  def main(args: Array[String]): Unit = {
+    val parser = new scopt.OptionParser[Config]("Configuration - Text") {
+      opt[Int]('t', "text").validate { x => if (x == 1 || x == 2) success else failure("--text must be 1 or 2") }
+        .action { (x, c) =>
+          val t = x match {
+            case 1 => Text1
+            case 2 => Text2
+          }
+          c.copy(text = t)
+        }.text("text selection (1 or 2)")
+
+      opt[String]('f', "format").validate { x => if (x == "png" || x == "pdf") success else failure ("--format must be png or pdf") }
+        .action { (x, c) =>
+          val f = VideoSettings.Format(x)
+          c.copy(format = f)
+        }
+    }
+    parser.parse(args, Config()).fold(sys.exit(1)) { config =>
+      Swing.onEDT(startup(config))
+    }
+  }
+
+  def startup(config: Config): Unit = {
     val v = text.Visual()
 
-    val textObj = args.headOption.getOrElse("text1") match {
-      case "text1"  => text.Text1
-      case "text2"  => text.Text2
-    }
+    val textObj = config.text
 
     val ggHead = Button("Head") {
       // v.initChromosome(100)
@@ -65,11 +87,11 @@ object Text extends SwingApplication {
     }
 
     val ggSaveFrame = Button("Save Frame") {
-      val fmt   = new SimpleDateFormat("'betanovuss_'yyMMdd'_'HHmmss'.png'", Locale.US)
+      val fmt   = new SimpleDateFormat(s"'betanovuss_'yyMMdd'_'HHmmss'.${config.format.ext}'", Locale.US)
       val name  = fmt.format(new Date)
       val f     = userHome / "Pictures" / name
       val vs    = VideoSettings()
-      v.saveFrameAsPNG(f, width = vs.width, height = vs.height)
+      v.saveFrame(f, width = vs.width, height = vs.height, format = config.format, dpi = config.dpi)
     }
 
     val ggParamSnap = Button("Parameter Snapshot") {
@@ -99,9 +121,11 @@ object Text extends SwingApplication {
         cfg.anim      = textObj.anim
         cfg.text      = textObj.text
         cfg.numFrames = cfg.anim.last._1 + cfg.framesPerSecond * textObj.tail // 120
+        cfg.format    = config.format
+        cfg.dpi       = config.dpi
         cfg.baseFile
 
-        val p         = v.saveFrameSeriesAsPNG(cfg)
+        val p         = v.saveFrameSeries(cfg)
         seriesProc    = Some(p)
         p.addListener {
           case prog @ Processor.Progress(_, _) => onEDT(ggProgress.value = prog.toInt)

@@ -24,11 +24,11 @@ object VideoSettings {
     import b._
     Impl(baseFile = baseFile, width = width, height = height,
       numFrames = numFrames, framesPerSecond = framesPerSecond,
-      speedLimit = speedLimit, text = text, anim = anim)
+      speedLimit = speedLimit, text = text, anim = anim, format = format, dpi = dpi)
   }
 
   private final case class Impl(baseFile: File, width: Int, height: Int, numFrames: Int, framesPerSecond: Int,
-                                speedLimit: Double, text: String, anim: Anim)
+                                speedLimit: Double, text: String, anim: Anim, format: Format, dpi: Double)
     extends VideoSettings {
 
     override def productPrefix = "VideoSetting"
@@ -50,7 +50,21 @@ object VideoSettings {
     var speedLimit          = 0.1
     var text                = "Foo Bar"
     var anim                = Vector.empty: Anim
+    var format              = Format.PNG : Format
+    var dpi                 = 300.0
   }
+
+  object Format {
+    def apply(name: String): Format = name match {
+      case PNG.ext => PNG
+      case PDF.ext => PDF
+    }
+    case object PNG extends Format { val ext = "png" }
+    case object PDF extends Format { val ext = "pdf" }
+
+    val all = Seq[Format](PNG, PDF)
+  }
+  sealed trait Format { def ext: String }
 }
 trait VideoSettings {
   def baseFile            : File
@@ -62,4 +76,7 @@ trait VideoSettings {
   def speedLimit          : Double
   def text                : String
   def anim                : Anim
+
+  def format              : VideoSettings.Format
+  def dpi                 : Double
 }

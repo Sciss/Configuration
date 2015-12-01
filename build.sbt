@@ -2,12 +2,12 @@ lazy val baseName = "Configuration"
 
 def baseNameL = baseName.toLowerCase
 
-lazy val projectVersion   = "0.5.0"
+lazy val projectVersion   = "0.6.0-SNAPSHOT"
 
-lazy val commonSettings = Project.defaultSettings ++ Seq(
+lazy val commonSettings = Seq(
   version            := projectVersion,
   organization       := "de.sciss",
-  scalaVersion       := "2.11.6",
+  scalaVersion       := "2.11.7",
   homepage           := Some(url("https://github.com/Sciss/" + baseName)),
   licenses           := Seq("GPL v3+" -> url("http://www.gnu.org/licenses/gpl-3.0.txt")),
   scalacOptions     ++= Seq("-deprecation", "-unchecked", "-feature", "-Xfuture")
@@ -20,13 +20,15 @@ lazy val video = Project(
     name        := s"$baseName-video",
     description := "Scripts for video processing",
     libraryDependencies ++= Seq(
-      "com.jhlabs"    %  "filters"                  % "2.0.235-1",
-      "de.sciss"      %% "fileutil"                 % "1.1.1",
-      "de.sciss"      %% "swingplus"                % "0.2.0",
-      "de.sciss"      %% "numbers"                  % "0.1.1",
-      "de.sciss"      %% "kollflitz"                % "0.2.0",
-      "de.sciss"      %% "processor"                % "0.4.0",
-      "de.sciss"      %  "prefuse-core"             % "1.0.0"
+      "com.jhlabs"       %  "filters"      % "2.0.235",
+      "de.sciss"         %% "fileutil"     % "1.1.1",
+      "de.sciss"         %% "swingplus"    % "0.2.0",
+      "de.sciss"         %% "numbers"      % "0.1.1",
+      "de.sciss"         %% "kollflitz"    % "0.2.0",
+      "de.sciss"         %% "processor"    % "0.4.0",
+      "de.sciss"         %  "prefuse-core" % "1.0.0",
+      "com.github.scopt" %% "scopt"        % "3.3.0",
+      "de.sciss"         %% "pdflitz"      % "1.2.1"
     )
   )
 )
@@ -38,12 +40,12 @@ lazy val sound = Project(
     name        := s"$baseName-sound",
     description := "Sound installation",
     libraryDependencies ++= Seq(
-      "de.sciss"          %% "soundprocesses-views"     % "2.18.1",
-      "de.sciss"          %% "lucredata-core"           % "2.3.1",
-      "de.sciss"          %% "lucredata-views"          % "2.3.1",
-      "de.sciss"          %% "scalacollider"            % "1.17.2",
-      "de.sciss"          %% "scalacolliderswing-core"  % "1.25.1",
-      "de.sciss"          %% "lucrestm-bdb"             % "2.1.1",
+      "de.sciss"          %% "soundprocesses-views"     % "2.21.1",
+      "de.sciss"          %% "lucredata-core"           % "2.3.3",
+      "de.sciss"          %% "lucredata-views"          % "2.3.3",
+      "de.sciss"          %% "scalacollider"            % "1.17.4",
+      "de.sciss"          %% "scalacolliderswing-core"  % "1.25.3",
+      "de.sciss"          %% "lucrestm-bdb"             % "2.1.2",
       "com.github.scopt"  %% "scopt"                    % "3.3.0"
     ),
     mainClass in assembly := Some("de.sciss.configuration.Configuration"),
